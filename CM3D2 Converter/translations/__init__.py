@@ -412,8 +412,19 @@ def register(__name__=__name__):
         pre_settings = system.use_international_fonts
         system.use_international_fonts = True
 
-    # Work around for disabled translations when language is 'en_US'
-    elif bpy.app.version >= (2, 83) and bpy.app.version < (2, 93): # fixed in 2.93LTS
+    # Since the add-on in Japanese we want to translate even when Blender's language is set to English.
+    elif bpy.app.version >= (2, 93):
+        if system.language in {'en_US', 'DEFAULT'}         \
+            and system.use_translate_tooltips     == False \
+            and system.use_translate_interface    == False \
+            and system.use_translate_new_dataname == False:
+
+            system.use_translate_tooltips     = True
+            system.use_translate_interface    = True
+            system.use_translate_new_dataname = True
+
+    # Work around for disabled translations when language is 'en_US', fixed in 2.93LTS
+    elif bpy.app.version >= (2, 83): 
         if system.language == 'en_US':
             pre_settings = system.language
             system.language = 'DEFAULT'
