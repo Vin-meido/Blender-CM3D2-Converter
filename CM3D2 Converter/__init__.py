@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2021, 6, 22),
+    "version": ("luv", 2021, 8, 26),
     "blender": (2, 80, 0),
     "location" : "File > Import/Export > CM3D2 Model (.model)",
     "description" : "A plugin dedicated to the editing, importing, and exporting of CM3D2 .model Files.",
@@ -143,7 +143,7 @@ class AddonPreferences(bpy.types.AddonPreferences):
     tex_export_path = bpy.props.StringProperty(name=".tex Default Export Path", subtype='FILE_PATH', description="When exporting a .tex file. The file selection prompt will begin here.")
 
     mate_default_path = bpy.props.StringProperty(name=".mate Default Path", subtype='DIR_PATH', description="If set. The file selection will open here.")
-    mate_unread_same_value = bpy.props.BoolProperty(name="Delete if there are two or more same values", default=True, description="_ShadowColor")
+    mate_unread_same_value = bpy.props.BoolProperty(name="Delete if there are two or more same values", default=False, description="When importing materials from a .model, skip materials that have duplicate names.")
     mate_import_path = bpy.props.StringProperty(name=".mate Default Import Path", subtype='FILE_PATH', description="When importing a .mate file. The file selection prompt will begin here.")
     mate_export_path = bpy.props.StringProperty(name=".mate Default Export Path", subtype='FILE_PATH', description="When exporting a .mate file. The file selection prompt will begin here.")
 

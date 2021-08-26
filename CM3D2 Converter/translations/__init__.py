@@ -524,7 +524,7 @@ def unregister(__name__=__name__):
         if hasattr(system, 'use_international_fonts'):
             system.use_international_fonts = pre_settings
         
-        if bpy.app.version >= (2, 83, 0):
+        if bpy.app.version >= (2, 83, 0) and bpy.app.version < (2, 93):
             system.language = pre_settings
 
     pre_settings = None
