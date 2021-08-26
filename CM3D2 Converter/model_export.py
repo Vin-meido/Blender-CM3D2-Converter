@@ -55,6 +55,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
     is_align_to_base_bone = bpy.props.BoolProperty(name="Align to Base Bone", default=True, description="Align the object to it's base bone")
     is_convert_tris = bpy.props.BoolProperty(name="四角面を三角面に", default=True, description="四角ポリゴンを三角ポリゴンに変換してから出力します、元のメッシュには影響ありません")
+    is_split_sharp = bpy.props.BoolProperty(name="Split Sharp Edges", default=True, description="Split all edges marked as sharp.")
     is_normalize_weight = bpy.props.BoolProperty(name="ウェイトの合計を1.0に", default=True, description="4つのウェイトの合計値が1.0になるように正規化します")
     is_convert_bone_weight_names = bpy.props.BoolProperty(name="頂点グループ名をCM3D2用に変換", default=True, description="全ての頂点グループ名をCM3D2で使える名前にしてからエクスポートします")
     is_clean_vertex_groups = bpy.props.BoolProperty(name="クリーンな頂点グループ", default=True, description="重みがゼロの場合、頂点グループから頂点を削除します")
@@ -177,6 +178,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         box.label(text="メッシュオプション")
         box.prop(self , 'is_align_to_base_bone', icon=compat.icon('OBJECT_ORIGIN'  ))
         box.prop(self , 'is_convert_tris'      , icon=compat.icon('MESH_DATA'      ))
+        box.prop(self , 'is_split_sharp'       , icon=compat.icon('MOD_EDGESPLIT'  ))
         box.prop(prefs, 'skip_shapekey'        , icon=compat.icon('SHAPEKEY_DATA'  ))
         box.prop(self , 'export_tangent'       , icon=compat.icon('CURVE_BEZCIRCLE'))
         sub_box = box.box()
@@ -377,6 +379,11 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             bpy.ops.object.align_to_cm3d2_base_bone(scale=1.0/self.scale, is_preserve_mesh=True, bone_info_mode=self.bone_info_mode)
             me.update()
 
+        if self.is_split_sharp:
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.split_sharp()
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         # LocalBoneData情報読み込み
         local_bone_data = []
         if self.bone_info_mode == 'ARMATURE':
@@ -563,7 +570,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             custom_normals = [mathutils.Vector() for i in range(len(me.vertices))]
             me.calc_normals_split()
             for loop in me.loops:
-                custom_normals[loop.vertex_index] = loop.normal.copy()
+                custom_normals[loop.vertex_index] += loop.normal
+            for no in custom_normals:
+                no.normalize()
 
         cm_verts = []
         cm_norms = []
@@ -854,8 +863,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 mat = compat.mul(bone.parent.matrix.inverted(), mat)
                 mat = compat.convert_bl_to_cm_bone_space(mat)
             else:
-                mat = compat.convert_bl_to_cm_space(mat)
                 mat = compat.convert_bl_to_cm_bone_rotation(mat)
+                mat = compat.convert_bl_to_cm_space(mat)
             
             co = mat.to_translation() * self.scale
             rot = mat.to_quaternion()
@@ -891,13 +900,17 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             #co = opengl_mat.to_translation() * self.scale
             #rot = opengl_mat.to_quaternion()
 
-            bone_data.append({
-                'name': bone.name,
+            data = {
+                'name': common.encode_bone_name(bone.name, self.is_convert_bone_weight_names),
                 'unknown': unknown_flag,
                 'parent_index': parent_index,
                 'co': co.copy(),
                 'rot': rot.copy(),
-            })
+            }
+            scale = arm.edit_bones[bone.name].get('cm3d2_bone_scale')
+            if scale:
+                data['scale'] = scale
+            bone_data.append(data)
         
         compat.set_active(context, pre_active)
         bpy.ops.object.mode_set(mode=pre_mode)
@@ -939,6 +952,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         """アーマチュアを解析してBoneDataを返す"""
         arm = ob.data
 
+        # XXX Instead of just adding all bones, only bones / bones-with-decendants 
+        #     that have use_deform == True or mathcing vertex groups should be used
         bones = []
         bone_name_indices = {}
         already_bone_names = []
@@ -961,35 +976,44 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         local_bone_data = []
         for bone in bones:
-
             mat = bone.matrix_local.copy()
-
-            co = mat.to_translation() * self.scale
-            rot = mat.to_quaternion()
-
-            co.rotate(rot.inverted())
-            co.x, co.y, co.z = co.y, co.x, -co.z
-
-            fix_quat = mathutils.Euler((0, 0, math.radians(-90)), 'XYZ').to_quaternion()
-            rot = compat.mul(rot, fix_quat)
-            rot.w, rot.x, rot.y, rot.z = -rot.z, -rot.y, -rot.x, rot.w
-
-            co_mat = mathutils.Matrix.Translation(co)
-            rot_mat = rot.to_matrix().to_4x4()
-            mat = compat.mul(co_mat, rot_mat)
-
-            copy_mat = mat.copy()
-            mat[0][0], mat[0][1], mat[0][2], mat[0][3] = copy_mat[0][0], copy_mat[1][0], copy_mat[2][0], copy_mat[3][0]
-            mat[1][0], mat[1][1], mat[1][2], mat[1][3] = copy_mat[0][1], copy_mat[1][1], copy_mat[2][1], copy_mat[3][1]
-            mat[2][0], mat[2][1], mat[2][2], mat[2][3] = copy_mat[0][2], copy_mat[1][2], copy_mat[2][2], copy_mat[3][2]
-            mat[3][0], mat[3][1], mat[3][2], mat[3][3] = copy_mat[0][3], copy_mat[1][3], copy_mat[2][3], copy_mat[3][3]
+            mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
+            mat = compat.convert_bl_to_cm_bone_rotation(mat)
+            pos = mat.translation.copy()
+            
+            mat.transpose()
+            mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+            pos = compat.mul(mat.to_3x3(), pos)
+            pos *= -self.scale
+            mat.translation = pos
+            mat.transpose()
+            
+            #co = mat.to_translation() * self.scale
+            #rot = mat.to_quaternion()
+            #
+            #co.rotate(rot.inverted())
+            #co.x, co.y, co.z = co.y, co.x, -co.z
+            #
+            #fix_quat = mathutils.Euler((0, 0, math.radians(-90)), 'XYZ').to_quaternion()
+            #rot = compat.mul(rot, fix_quat)
+            #rot.w, rot.x, rot.y, rot.z = -rot.z, -rot.y, -rot.x, rot.w
+            #
+            #co_mat = mathutils.Matrix.Translation(co)
+            #rot_mat = rot.to_matrix().to_4x4()
+            #mat = compat.mul(co_mat, rot_mat)
+            #
+            #copy_mat = mat.copy()
+            #mat[0][0], mat[0][1], mat[0][2], mat[0][3] = copy_mat[0][0], copy_mat[1][0], copy_mat[2][0], copy_mat[3][0]
+            #mat[1][0], mat[1][1], mat[1][2], mat[1][3] = copy_mat[0][1], copy_mat[1][1], copy_mat[2][1], copy_mat[3][1]
+            #mat[2][0], mat[2][1], mat[2][2], mat[2][3] = copy_mat[0][2], copy_mat[1][2], copy_mat[2][2], copy_mat[3][2]
+            #mat[3][0], mat[3][1], mat[3][2], mat[3][3] = copy_mat[0][3], copy_mat[1][3], copy_mat[2][3], copy_mat[3][3]
 
             mat_array = []
             for vec in mat:
                 mat_array.extend(vec[:])
-
+            
             local_bone_data.append({
-                'name': bone.name,
+                'name': common.encode_bone_name(bone.name, self.is_convert_bone_weight_names),
                 'matrix': mat_array,
             })
         return local_bone_data

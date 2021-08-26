@@ -413,7 +413,7 @@ def register(__name__=__name__):
         system.use_international_fonts = True
 
     # Work around for disabled translations when language is 'en_US'
-    elif bpy.app.version >= (2, 83, 0) and bpy.app.version <= (2, 91, 2): # might be fixed in some future release
+    elif bpy.app.version >= (2, 83) and bpy.app.version < (2, 93): # fixed in 2.93LTS
         if system.language == 'en_US':
             pre_settings = system.language
             system.language = 'DEFAULT'
@@ -524,7 +524,7 @@ def unregister(__name__=__name__):
         if hasattr(system, 'use_international_fonts'):
             system.use_international_fonts = pre_settings
         
-        if bpy.app.version >= (2, 83, 0):
+        if bpy.app.version >= (2, 83, 0) and bpy.app.version < (2, 93):
             system.language = pre_settings
 
     pre_settings = None

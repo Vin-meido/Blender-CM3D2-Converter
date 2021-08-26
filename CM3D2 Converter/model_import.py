@@ -46,7 +46,8 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
     is_armature = bpy.props.BoolProperty(name="アーマチュア生成", default=True, description="ウェイトを編集する時に役立つアーマチュアを読み込みます")
     is_armature_clean = bpy.props.BoolProperty(name="不要なボーンを削除", default=False, description="ウェイトが無いボーンを削除します")
     is_custom_bones = bpy.props.BoolProperty(name="Use Custom Bones", default=False, description="Use the currently selected object for custom bone shapes.")\
-    
+    is_use_local_bones = bpy.props.BoolProperty(name="Use Local Bones", default=True, description="Use the Local Bone Data for orientation (more accurate)")
+
     is_bone_data_text = bpy.props.BoolProperty(name="テキスト", default=True, description="ボーン情報をテキストとして読み込みます")
     is_bone_data_obj_property = bpy.props.BoolProperty(name="オブジェクトのカスタムプロパティ", default=True, description="メッシュオブジェクトのカスタムプロパティにボーン情報を埋め込みます")
     is_bone_data_arm_property = bpy.props.BoolProperty(name="アーマチュアのカスタムプロパティ", default=True, description="アーマチュアデータのカスタムプロパティにボーン情報を埋め込みます")
@@ -75,18 +76,21 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         box.prop(self, 'is_mesh', icon='MESH_DATA')
 
         sub_box = box.box()
+        sub_box.enabled = self.is_mesh
         sub_box.label(text="メッシュ")
         sub_box.prop(self, 'is_remove_doubles', icon='STICKY_UVS_VERT')
-        sub_box.prop(self, 'is_seam' , icon='KEY_DEHLT')
-        sub_box.prop(self, 'is_sharp', icon='KEY_DEHLT')
+        sub_box.prop(self, 'is_seam' , icon=compat.icon('UV_EDGESEL'))
+        sub_box.prop(self, 'is_sharp', icon=compat.icon('EDGESEL'))
 
         sub_box = box.box()
+        sub_box.enabled = self.is_mesh
         sub_box.label(text="頂点グループ")
         sub_box.prop(self, 'is_vertex_group_sort', icon='SORTALPHA')
         sub_box.prop(self, 'is_remove_empty_vertex_group', icon='DISCLOSURE_TRI_DOWN')
         sub_box.prop(self, 'is_convert_bone_weight_names', icon='BLENDER')
 
         sub_box = box.box()
+        sub_box.enabled = self.is_mesh
         sub_box.label(text="マテリアル")
         sub_box.prop(prefs, 'is_replace_cm3d2_tex', icon='BORDERMOVE')
         sub_box.prop(self, 'reload_tex_cache', icon='FILE_REFRESH')
@@ -96,14 +100,15 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
         box = self.layout.box()
         box.prop(self, 'is_armature', icon='ARMATURE_DATA')
-
+        
         sub_box = box.box()
         sub_box.label(text="アーマチュア")
-        sub_box.prop(self , 'is_armature_clean'           , icon='X')
-        sub_box.prop(self , 'is_convert_bone_weight_names', icon='BLENDER', text="ボーン名をBlender用に変換")
-        sub_box.prop(prefs, 'show_bone_in_front'          , icon=compat.icon('HIDE_OFF') , text="Show Bones in Front"            )
+        sub_box.prop(self , 'is_use_local_bones'          , icon=compat.icon('GROUP_BONE'), text="Use Local Bone Data")
+        sub_box.prop(self , 'is_armature_clean'           , icon=compat.icon('X'         ))
+        sub_box.prop(self , 'is_convert_bone_weight_names', icon=compat.icon('BLENDER'   ), text="ボーン名をBlender用に変換")
+        sub_box.prop(prefs, 'show_bone_in_front'          , icon=compat.icon('HIDE_OFF'  ), text="Show Bones in Front")
         row = sub_box.row()
-        row.prop    (self , 'is_custom_bones'             , icon=compat.icon('BONE_DATA'), text="Use Selected as Bone Shape"     )
+        row.prop    (self , 'is_custom_bones'             , icon=compat.icon('BONE_DATA' ), text="Use Selected as Bone Shape"     )
         row.enabled = bool(context.object)
         
         box = self.layout.box()
@@ -181,6 +186,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     if model_ver >= 2001:
                         use_scale = struct.unpack('<B', reader.read(1))[0]
                         if use_scale:
+                            print(bone_data[i]['name'],"has scale data!")
                             scale_x, scale_y, scale_z = struct.unpack('<3f', reader.read(3*4))
                             bone_data[i]['scale'] = [scale_x, scale_y, scale_z]
 
@@ -367,12 +373,15 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
             bpy.ops.object.mode_set(mode='EDIT')
 
+            is_odd_scale_bone = False
+
             # 基幹ボーンのみ作成
             child_data = []
             for data in bone_data:
                 if not data['parent_name']:
                     bone = arm.edit_bones.new(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
                     bone.head, bone.tail = (0, 0, 0), (0, 1, 0)
+                    bone.use_deform = False
 
                     #co.x, co.y, co.z = -co.x, co.z, -co.y
                     #rot = compat.mul(rot, mathutils.Quaternion((0, 0, 1), math.radians(90)))
@@ -406,6 +415,19 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
 
                     bone["UnknownFlag"] = 1 if data['unknown'] else 0
+                    if 'scale' in data:
+                        bone['cm3d2_bone_scale'] = data['scale']
+                        scale = mathutils.Vector(data['scale'])
+                        if ( scale - mathutils.Vector((1,1,1)) ).length > 1e-5:
+                            is_odd_scale_bone = True
+                            self.report(type={'WARNING'}, message=f_tip_("Bone '{bone_name}' has odd scale '{bone_scale}' (odd by {bone_diff})", bone_name=bone.name, bone_scale=scale, bone_diff=( scale - mathutils.Vector((1,1,1)) ).length))
+                        scale *= self.scale * 0.01
+                        scale = compat.convert_cm_to_bl_bone_rotation(scale)
+                        bone.bbone_x = scale.x
+                        bone.bbone_z = scale.z
+                        #look = bone.tail - bone.head
+                        #look *= scale.y
+                        #bone.tail = look + bone.head
                 else:
                     child_data.append(data)
             context.window_manager.progress_update(1.333)
@@ -418,6 +440,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     bone = arm.edit_bones.new(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
                     bone.parent = parent
                     bone.head, bone.tail = (0, 0, 0), (0, 1, 0)
+                    bone.use_deform = False
 
                     #parent_mats = []
                     #current_bone = bone
@@ -492,12 +515,57 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     compat.set_bone_matrix(bone, mat)
                     
                     bone["UnknownFlag"] = 1 if data['unknown'] else 0
+                    if 'scale' in data:
+                        bone['cm3d2_bone_scale'] = data['scale']
+                        scale = mathutils.Vector(data['scale'])
+                        if ( scale - mathutils.Vector((1,1,1)) ).length > 1e-5:
+                            is_odd_scale_bone = True
+                            self.report(type={'WARNING'}, message=f_tip_("Bone '{bone_name}' has odd scale '{bone_scale}' (odd by {bone_diff})", bone_name=bone.name, bone_scale=scale, bone_diff=( scale - mathutils.Vector((1,1,1)) ).length))
+                        scale *= self.scale * 0.01
+                        bone.bbone_x = scale.x
+                        bone.bbone_z = scale.z
+                        bone.bbone_segments = scale.y
+                        #look = bone.tail - bone.head
+                        #look *= scale.y
+                        #bone.tail = look + bone.head
                 else:
                     child_data.append(data)
             context.window_manager.progress_update(1.666)
-
+            
+            # Configure bones in local bone data
+            is_local_bones_corrupt = False
+            for data in local_bone_data:
+                bone = arm.edit_bones.get(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
+                bone.use_deform = True
+                if self.is_use_local_bones:
+                    mat = mathutils.Matrix(data['matrix'])
+                    
+                    mat.transpose()
+                    mat.translation *= -self.scale
+                    mat.translation = compat.mul(mat.to_3x3().inverted(), mat.translation)
+                    pos = mat.translation.copy()
+                    
+                    mat.transpose()
+                    mat.translation = pos
+                    #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+                    mat = compat.convert_cm_to_bl_bone_rotation(mat)
+                    mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
+                
+                    # The matrices from the local bone data are more precise rotations, but make sure they aren't corrupted
+                    old_pos, old_rot, old_scale = bone.matrix.decompose()
+                    compat.set_bone_matrix(bone, mat)
+                    new_pos, new_rot, new_scale = bone.matrix.decompose()
+                    dif_pos = (new_pos-old_pos).length/self.scale
+                    dif_rot = old_rot.rotation_difference(new_rot)
+                    if dif_pos > 0.1 or dif_rot.w < .9:
+                        print(dif_pos,  dif_rot)
+                        is_local_bones_corrupt = True
+                        #self.report(type={'WARNING'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
+            
             # ボーン整頓
             for bone in arm.edit_bones:
+                if bone.get('cm3d2_bone_scale'):
+                    continue
                 if len(bone.children) == 0:
                     if bone.parent:
                         pass
@@ -517,6 +585,8 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     else:
                         bone.length = 0.2 * self.scale
             for bone in arm.edit_bones:
+                if bone.get('cm3d2_bone_scale'):
+                    continue
                 if len(bone.children) == 0:
                     if bone.parent:
                         bone.length = bone.parent.length * 0.5
@@ -612,10 +682,32 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     loop[bm.loops.layers.uv[0]].uv = vertex_data[loop.vert.index]['uv']
                     for extra_uv_index, extra_uv in enumerate(vertex_data[loop.vert.index]['extra_uvs']):
                         loop[bm.loops.layers.uv[extra_uv_index+1]].uv = extra_uv
-
             bm.to_mesh(me)
             bm.free()
             context.window_manager.progress_update(5)
+
+            # Custom Split Normals
+            #normals_color = me.vertex_colors.new(name=f"Basis_normals", do_init=False) or me.vertex_colors[-1]
+            #for vert_index, vert in enumerate(vertex_data):
+            #    no = compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) ) #mathutils.Vector(vert['normal']) * mathutils.Vector((-1,1,1)) #
+            #    no.normalize()
+            #    print(no)
+            #    for loop_index in vert_loops[vert_index]:
+            #        #normals[loop_index] = no
+            #        normals_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
+            #            *no, #*(no * 0.5 + mathutils.Vector([0.5]*3)),
+            #            1,
+            #        )
+            #me.normals_split_custom_set(normals)
+            me.normals_split_custom_set_from_vertices(
+                tuple(
+                    compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) )
+                    for vert in vertex_data
+                )
+            )
+            me.use_auto_smooth = True
+
+
             # モーフ追加
             morph_count = 0
             for data in misc_data:
@@ -695,33 +787,38 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
             # メッシュ整頓
             pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
-            if self.is_sharp:
+            if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
                 context.tool_settings.mesh_select_mode = (False, True, False)
                 bpy.ops.object.mode_set(mode='EDIT')
-
+            
                 bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
                 bpy.ops.mesh.mark_sharp(use_verts=False)
-
+            
                 bpy.ops.object.mode_set(mode='OBJECT')
                 context.tool_settings.mesh_select_mode = pre_mesh_select_mode
             if self.is_remove_doubles:
                 pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
                 context.tool_settings.mesh_select_mode = (True, False, False)
                 bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_all(action='DESELECT')
-                bpy.ops.object.mode_set(mode='OBJECT')
+                if not self.is_sharp:
+                    bpy.ops.mesh.select_all(action='DESELECT')
+                    bpy.ops.object.mode_set(mode='OBJECT')
 
-                for is_comparison, vert in zip(comparison_data, me.vertices):
-                    if is_comparison:
-                        vert.select = True
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.remove_doubles(threshold=0.000001)
-
-                if self.is_sharp:
+                    for is_comparison, vert in zip(comparison_data, me.vertices):
+                        if is_comparison:
+                            vert.select = True
+                    bpy.ops.object.mode_set(mode='EDIT')
+                else:
+                    bpy.ops.mesh.select_all(action='SELECT')
+                
+                if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
+                    bpy.ops.mesh.remove_doubles(threshold=0.000001)
                     context.tool_settings.mesh_select_mode = (False, True, False)
                     bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
-                    bpy.ops.mesh.mark_sharp(clear=True, use_verts=False)
-
+                    bpy.ops.mesh.mark_sharp(use_verts=False)
+                else:
+                    bpy.ops.mesh.remove_doubles(threshold=0.000001, use_sharp_edge_from_normals=self.is_sharp)
+                
                 bpy.ops.object.mode_set(mode='OBJECT')
             context.tool_settings.mesh_select_mode = pre_mesh_select_mode
             if self.is_seam:
@@ -861,7 +958,11 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             filesize = filesize / 1024.0
             filesize_str = "KB"
         self.report(type={'INFO'}, message=f_tip_("modelのインポートが完了しました ({} {}/ {:.2f} 秒)", filesize, filesize_str, require_time))
-
+        
+        if is_odd_scale_bone:
+            self.report(type={'WARNING'}, message="Found bone with a scale not equal to 1.")
+        if is_local_bones_corrupt:
+            self.report(type={'ERROR'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
         return {'FINISHED'}
 
     def create_mateprop_old(self, context, me, tex_set, mate, mate_idx, data: list):
