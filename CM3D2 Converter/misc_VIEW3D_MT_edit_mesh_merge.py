@@ -20,10 +20,10 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
 
     threshold        = bpy.props.FloatProperty(name="Merge Distance", default=0.0001, description="Maximum distance between elements to merge")
     normal_threshold = bpy.props.FloatProperty(name="Normal Angle"  , default=0.0000, description="Maximum angle between element's normals to mark sharp")
-    use_unselected   = bpy.props.FloatProperty(name="Unselected"    , default=False , description="Merge selected to other unselected vertices")
-    mark_seams       = bpy.props.FloatProperty(name="Mark Seams"    , default=True  , description="Mark seams")
-    mark_sharp       = bpy.props.FloatProperty(name="Mark Sharp"    , default=True  , description="Mark sharp")
-    mark_freestyle   = bpy.props.FloatProperty(name="Mark Freestyle", default=True  , description="Mark freestyle")
+    use_unselected   = bpy.props.BoolProperty(name="Unselected"    , default=False , description="Merge selected to other unselected vertices")
+    mark_seams       = bpy.props.BoolProperty(name="Mark Seams"    , default=True  , description="Mark seams")
+    mark_sharp       = bpy.props.BoolProperty(name="Mark Sharp"    , default=True  , description="Mark sharp")
+    mark_freestyle   = bpy.props.BoolProperty(name="Mark Freestyle", default=True  , description="Mark freestyle")
     
     @classmethod
     def poll(cls, context):
@@ -40,9 +40,9 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
 
         selected_verts = bm.verts if len(bm.select_history) <= 0 else set( filter(lambda v : v.select, bm.verts) )
         search_verts   = bm.verts if self.use_unselected         else selected_verts  
-
+        
         targetmap = bmesh.ops.find_doubles(bm, verts=search_verts, dist=self.threshold,
-            keep_verts=selected_verts if use_unselected else None)['targetmap']
+            keep_verts=selected_verts if self.use_unselected else list())['targetmap']
         
         print(targetmap)
         return {'FINISHED'}
@@ -53,14 +53,6 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
         del comparison_counter
 
         selected_edges = bm.edges if len(bm.select_history) <= 0 else set( filter(lambda e : e.verts[0].select or e.verts[1].select, bm.edges) )
-        for edge in bm.edges:
-            if edge.is_boundary:
-                
-                
-
-        changed = bmesh.ops.split_edges(bm, edges=sharp_edges)
-        for edge in changed['edges']:
-            edge.select_set(True)
 
         # メッシュ整頓
         pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
