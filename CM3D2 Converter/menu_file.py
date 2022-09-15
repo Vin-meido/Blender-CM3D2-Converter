@@ -415,8 +415,8 @@ def generate_command_type_collections(cls):
             command_class = prop[1]["type"]
 
         # Fix for Blender 2.93
-        elif "keywords" in dir(prop): 
-            if len(prop.keywords)  != len(prop_example.keywords) :
+        elif "function" in dir(prop) and "keywords" in dir(prop) and "type" in prop.keywords.keys(): 
+            if prop.function != prop_example.function:
                 continue
             command_class = prop.keywords["type"]
         else:
