@@ -60,6 +60,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
     is_convert_bone_weight_names = bpy.props.BoolProperty(name="頂点グループ名をCM3D2用に変換", default=True, description="全ての頂点グループ名をCM3D2で使える名前にしてからエクスポートします")
     is_clean_vertex_groups = bpy.props.BoolProperty(name="クリーンな頂点グループ", default=True, description="重みがゼロの場合、頂点グループから頂点を削除します")
     
+    shapekey_threshold = bpy.props.FloatProperty(name="Shape Key Threshold", default=0.00150, min=0, soft_min=0.001, soft_max=0.01, precision=5, description="Lower values increase accuracy and file size. Higher values truncate small changes and reduce file size.")
 
     is_batch = bpy.props.BoolProperty(name="バッチモード", default=False, description="モードの切替やエラー個所の選択を行いません")
 
@@ -180,11 +181,15 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         box.prop(self , 'is_convert_tris'      , icon=compat.icon('MESH_DATA'      ))
         box.prop(self , 'is_split_sharp'       , icon=compat.icon('MOD_EDGESPLIT'  ))
         box.prop(prefs, 'skip_shapekey'        , icon=compat.icon('SHAPEKEY_DATA'  ))
+        row = box.row()
+        row.prop(self, 'shapekey_threshold', icon='SHAPEKEY_DATA', slider=True)
+        row.enabled = prefs.skip_shapekey
         box.prop(self , 'export_tangent'       , icon=compat.icon('CURVE_BEZCIRCLE'))
         sub_box = box.box()
         sub_box.prop(self, 'is_normalize_weight', icon='MOD_VERTEX_WEIGHT')
         sub_box.prop(self, 'is_clean_vertex_groups', icon='MOD_VERTEX_WEIGHT')
         sub_box.prop(self, 'is_convert_bone_weight_names', icon_value=common.kiss_icon())
+        sub_box
         sub_box = box.box()
         sub_box.prop(prefs, 'is_apply_modifiers', icon='MODIFIER')
         row = sub_box.row()
@@ -654,7 +659,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                                 no_diff = custom_normals[i] - vert.normal
                             else:
                                 no_diff = temp_me.vertices[i].normal - vert.normal
-                            if 0.001 < co_diff.length or 0.001 < no_diff.length:
+                            diff_threshold = self.shapekey_threshold / self.scale
+                            if co_diff.length > diff_threshold or no_diff.length > diff_threshold:
                                 co = co_diff * self.scale
                                 for d in vert_uvs[i]:
                                     morph.append((vert_index, co, no_diff))
