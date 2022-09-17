@@ -787,17 +787,18 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
             # メッシュ整頓
             pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
-            if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
+            
+            # This method is more consistent than use_sharp_edge_from_normals
+            if self.is_sharp:
                 context.tool_settings.mesh_select_mode = (False, True, False)
                 bpy.ops.object.mode_set(mode='EDIT')
-            
+                
                 bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
                 bpy.ops.mesh.mark_sharp(use_verts=False)
             
                 bpy.ops.object.mode_set(mode='OBJECT')
-                context.tool_settings.mesh_select_mode = pre_mesh_select_mode
+
             if self.is_remove_doubles:
-                pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
                 context.tool_settings.mesh_select_mode = (True, False, False)
                 bpy.ops.object.mode_set(mode='EDIT')
                 if not self.is_sharp:
@@ -811,16 +812,11 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 else:
                     bpy.ops.mesh.select_all(action='SELECT')
                 
-                if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
-                    bpy.ops.mesh.remove_doubles(threshold=0.000001)
-                    context.tool_settings.mesh_select_mode = (False, True, False)
-                    bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
-                    bpy.ops.mesh.mark_sharp(use_verts=False)
-                else:
-                    bpy.ops.mesh.remove_doubles(threshold=0.000001, use_sharp_edge_from_normals=self.is_sharp)
-                
+                bpy.ops.mesh.remove_doubles(threshold=0.000001)#, use_sharp_edge_from_normals=self.is_sharp)
                 bpy.ops.object.mode_set(mode='OBJECT')
+            
             context.tool_settings.mesh_select_mode = pre_mesh_select_mode
+
             if self.is_seam:
                 bpy.ops.object.mode_set(mode='EDIT')
                 bpy.ops.mesh.select_all(action='SELECT')
