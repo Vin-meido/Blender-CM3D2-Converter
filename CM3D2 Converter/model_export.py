@@ -66,6 +66,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
     is_batch = bpy.props.BoolProperty(name="バッチモード", default=False, description="モードの切替やエラー個所の選択を行いません")
 
     export_tangent = bpy.props.BoolProperty(name="接空間情報出力", default=False, description="接空間情報(binormals, tangents)を出力する")
+    
+    use_shapekey_colors = bpy.props.BoolProperty(name="Use Shape Key Colors", default=False, description="Use the shape key normals stored in the vertex colors instead of calculating the normals on export")
+    
 
     @classmethod
     def poll(cls, context):
@@ -182,10 +185,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         box.prop(self , 'is_convert_tris'      , icon=compat.icon('MESH_DATA'      ))
         box.prop(self , 'is_split_sharp'       , icon=compat.icon('MOD_EDGESPLIT'  ))
         box.prop(prefs, 'skip_shapekey'        , icon=compat.icon('SHAPEKEY_DATA'  ))
-        row = box.row()
-        row.prop(self, 'shapekey_threshold', icon='SHAPEKEY_DATA', slider=True)
-        row.enabled = prefs.skip_shapekey
+        box.prop(self , 'shapekey_threshold'   , icon=compat.icon('SHAPEKEY_DATA'  ), slider=True)
         box.prop(self , 'export_tangent'       , icon=compat.icon('CURVE_BEZCIRCLE'))
+        box.prop(self , 'use_shapekey_colors'  , icon=compat.icon('GROUP_VCOL')     )
         sub_box = box.box()
         sub_box.prop(self, 'is_normalize_weight', icon='MOD_VERTEX_WEIGHT')
         sub_box.prop(self, 'is_clean_vertex_groups', icon='MOD_VERTEX_WEIGHT')
@@ -648,7 +650,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                     no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
                         morph = []
-                        if me.has_custom_normals:
+                        vcol = me.vertex_colors[f'{shape_key.name}_normals'].data if f'{shape_key.name}_normals' in me.vertex_colors.keys() else None
+                        sk_normal_diffs = None
+                        if self.use_shapekey_colors and not vcol is None:
+                            sk_normal_diffs = [mathutils.Vector((0,0,0))] * len(me.vertices)
+                            sk_normal_diff_count = [0] * len(me.vertices)
+                            for loop_index, loop in enumerate(me.loops):
+                                sk_normal_diffs[loop.vertex_index] = (mathutils.Vector(vcol[loop_index].color[:3]) - mathutils.Vector((.5,.5,.5))) * 2
+                                sk_normal_diff_count[loop.vertex_index] += 1
+                            for i, count in enumerate(sk_normal_diff_count):
+                                if count <= 0:
+                                    continue
+                                sk_normal_diffs[loop.vertex_index] = sk_normal_diffs[loop.vertex_index] * (1/count)
+                        elif me.has_custom_normals:
                             sk_custom_normals = [mathutils.Vector()] * len(me.vertices)
                             sk_custom_split_normals = np.array(shape_key.normals_split_get())
                             sk_custom_split_normals = sk_custom_split_normals.reshape((len(me.loops), 3))
@@ -663,7 +677,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                         vert_index = 0
                         for i, vert in enumerate(me.vertices):
                             co_diff = shape_key.data[i].co - vert.co
-                            if me.has_custom_normals:
+                            if not sk_normal_diffs is None:
+                                no_diff = sk_normal_diffs[i]
+                            elif me.has_custom_normals:
                                 no_diff = sk_custom_normals[i] - custom_normals[i]
                             else:
                                 no_diff = sk_normals[i].normal - vert.normal
