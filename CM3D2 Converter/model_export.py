@@ -4,6 +4,7 @@ import math
 import bpy
 import bmesh
 import mathutils
+import numpy as np
 from operator import itemgetter
 from . import common
 from . import compat
@@ -640,32 +641,39 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         # モーフを書き出し
         if me.shape_keys:
-            temp_me = context.blend_data.meshes.new(name=me.name + ".temp")
             try:
-                vs = [vert.co for vert in me.vertices]
-                es = []
-                fs = [face.vertices for face in me.polygons]
-                temp_me.from_pydata(vs, es, fs)
                 if 2 <= len(me.shape_keys.key_blocks):
+                    co_diff_threshold = self.shapekey_threshold / self.scale
+                    no_diff_threshold = self.shapekey_threshold * 1000
+                    no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
                         morph = []
+                        if me.has_custom_normals:
+                            sk_custom_normals = [mathutils.Vector()] * len(me.vertices)
+                            sk_custom_split_normals = np.array(shape_key.normals_split_get())
+                            sk_custom_split_normals = sk_custom_split_normals.reshape((len(me.loops), 3))
+                            for loop_index, loop in enumerate(me.loops):
+                                sk_custom_normals[loop.vertex_index] += mathutils.Vector(sk_custom_split_normals[loop_index])
+                            for no in sk_custom_normals:
+                                no.normalize()
+                        else:
+                            sk_normals_array = np.array(shape_key.normals_vertex_get())
+                            sk_normals_array = sk_normals_array.reshape((len(me.loops), 3))
+                            sk_normals = [mathutils.Vector(row) for row in sk_normals_array]
                         vert_index = 0
-                        for i in range(len(me.vertices)):
-                            temp_me.vertices[i].co = shape_key.data[i].co.copy()
-                        temp_me.update()
                         for i, vert in enumerate(me.vertices):
                             co_diff = shape_key.data[i].co - vert.co
                             if me.has_custom_normals:
-                                no_diff = custom_normals[i] - vert.normal
+                                no_diff = sk_custom_normals[i] - custom_normals[i]
                             else:
-                                no_diff = temp_me.vertices[i].normal - vert.normal
-                            diff_threshold = self.shapekey_threshold / self.scale
-                            if co_diff.length > diff_threshold or no_diff.length > diff_threshold:
+                                no_diff = sk_normals[i].normal - vert.normal
+                            if co_diff.length > co_diff_threshold: #or no_diff.length_squared > no_diff_threshold_squared:
                                 co = co_diff * self.scale
                                 for d in vert_uvs[i]:
                                     morph.append((vert_index, co, no_diff))
                                     vert_index += 1
                             else:
+                                # ignore because change is too small (greatly lowers file size)
                                 vert_index += len(vert_uvs[i])
 
                         if prefs.skip_shapekey and not len(morph):
@@ -680,7 +688,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                             writer.write(struct.pack('<3f', vec.x, vec.y, vec.z))
                             writer.write(struct.pack('<3f', normal.x, normal.y, normal.z))
             finally:
-                context.blend_data.meshes.remove(temp_me)
+                print("FINISHED SHAPE KEYS WRITE")
+                pass
         common.write_str(writer, 'end')
 
     def write_tangents(self, writer, me):
