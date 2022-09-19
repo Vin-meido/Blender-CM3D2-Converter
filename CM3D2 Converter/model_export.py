@@ -646,7 +646,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             try:
                 if 2 <= len(me.shape_keys.key_blocks):
                     co_diff_threshold = self.shapekey_threshold / self.scale
-                    no_diff_threshold = self.shapekey_threshold
+                    no_diff_threshold = self.shapekey_threshold * 10
                     no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
                         morph = []
