@@ -646,44 +646,44 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             try:
                 if 2 <= len(me.shape_keys.key_blocks):
                     co_diff_threshold = self.shapekey_threshold / self.scale
-                    no_diff_threshold = self.shapekey_threshold * 1000
+                    no_diff_threshold = self.shapekey_threshold
                     no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
                         morph = []
                         vcol = me.vertex_colors[f'{shape_key.name}_normals'].data if f'{shape_key.name}_normals' in me.vertex_colors.keys() else None
-                        sk_normal_diffs = None
                         if self.use_shapekey_colors and not vcol is None:
                             sk_normal_diffs = [mathutils.Vector((0,0,0))] * len(me.vertices)
                             sk_normal_diff_count = [0] * len(me.vertices)
                             for loop_index, loop in enumerate(me.loops):
-                                sk_normal_diffs[loop.vertex_index] = (mathutils.Vector(vcol[loop_index].color[:3]) - mathutils.Vector((.5,.5,.5))) * 2
+                                to_add = (mathutils.Vector(vcol[loop_index].color[:3]) - mathutils.Vector((.5,.5,.5))) * 2
+                                sk_normal_diffs[loop.vertex_index] = sk_normal_diffs[loop.vertex_index] + to_add
                                 sk_normal_diff_count[loop.vertex_index] += 1
                             for i, count in enumerate(sk_normal_diff_count):
                                 if count <= 0:
                                     continue
-                                sk_normal_diffs[loop.vertex_index] = sk_normal_diffs[loop.vertex_index] * (1/count)
+                                sk_normal_diffs[i] *= (1/count)
                         elif me.has_custom_normals:
-                            sk_custom_normals = [mathutils.Vector()] * len(me.vertices)
-                            sk_custom_split_normals = np.array(shape_key.normals_split_get())
-                            sk_custom_split_normals = sk_custom_split_normals.reshape((len(me.loops), 3))
+                            sk_custom_normals = [mathutils.Vector((0,0,0))] * len(me.vertices)
+                            sk_custom_split_normals = np.array(shape_key.normals_split_get(), copy=False).reshape((len(me.loops), 3))
                             for loop_index, loop in enumerate(me.loops):
-                                sk_custom_normals[loop.vertex_index] += mathutils.Vector(sk_custom_split_normals[loop_index])
-                            for no in sk_custom_normals:
+                                to_add = mathutils.Vector(sk_custom_split_normals[loop_index])
+                                sk_custom_normals[loop.vertex_index] = sk_custom_normals[loop.vertex_index] + to_add
+                            for i, no in enumerate(sk_custom_normals):
                                 no.normalize()
                         else:
-                            sk_normals_array = np.array(shape_key.normals_vertex_get())
+                            sk_normals_array = np.array(shape_key.normals_vertex_get(), copy=False)
                             sk_normals_array = sk_normals_array.reshape((len(me.loops), 3))
                             sk_normals = [mathutils.Vector(row) for row in sk_normals_array]
                         vert_index = 0
                         for i, vert in enumerate(me.vertices):
                             co_diff = shape_key.data[i].co - vert.co
-                            if not sk_normal_diffs is None:
+                            if self.use_shapekey_colors and not vcol is None:
                                 no_diff = sk_normal_diffs[i]
                             elif me.has_custom_normals:
                                 no_diff = sk_custom_normals[i] - custom_normals[i]
                             else:
                                 no_diff = sk_normals[i].normal - vert.normal
-                            if co_diff.length > co_diff_threshold: #or no_diff.length_squared > no_diff_threshold_squared:
+                            if co_diff.length > co_diff_threshold or no_diff.length_squared > no_diff_threshold_squared:
                                 co = co_diff * self.scale
                                 for d in vert_uvs[i]:
                                     morph.append((vert_index, co, no_diff))
