@@ -61,14 +61,15 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
     is_convert_bone_weight_names = bpy.props.BoolProperty(name="頂点グループ名をCM3D2用に変換", default=True, description="全ての頂点グループ名をCM3D2で使える名前にしてからエクスポートします")
     is_clean_vertex_groups = bpy.props.BoolProperty(name="クリーンな頂点グループ", default=True, description="重みがゼロの場合、頂点グループから頂点を削除します")
     
-    shapekey_threshold = bpy.props.FloatProperty(name="Shape Key Threshold", default=0.00150, min=0, soft_min=0.001, soft_max=0.01, precision=5, description="Lower values increase accuracy and file size. Higher values truncate small changes and reduce file size.")
-
     is_batch = bpy.props.BoolProperty(name="バッチモード", default=False, description="モードの切替やエラー個所の選択を行いません")
 
     export_tangent = bpy.props.BoolProperty(name="接空間情報出力", default=False, description="接空間情報(binormals, tangents)を出力する")
 
+    
+    shapekey_threshold = bpy.props.FloatProperty(name="Shape Key Threshold", default=0.00150, min=0, soft_min=0.001, soft_max=0.01, precision=5, description="Lower values increase accuracy and file size. Higher values truncate small changes and reduce file size.")
     export_shapekey_normals = bpy.props.BoolProperty(name="Export Shape Key Normals", default=True, description="Export custom normals for each shape key on export.")
-    use_shapekey_colors = bpy.props.BoolProperty(name="Use Shape Key Colors", default=False, description="Use the shape key normals stored in the vertex colors instead of calculating the normals on export.")
+    shapekey_normals_blend = bpy.props.FloatProperty(name="Shape Key Normals Blend", default=0.6, min=0, max=1, precision=3, description="Adjust the influence of shape keys on custom normals")
+    use_shapekey_colors = bpy.props.BoolProperty(name="Use Shape Key Colors", default=True, description="Use the shape key normals stored in the vertex colors instead of calculating the normals on export. (Recommend disabling if geometry was customized)")
     
 
     @classmethod
@@ -182,15 +183,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         
         box = self.layout.box()
         box.label(text="メッシュオプション")
-        box.prop(self , 'is_align_to_base_bone'  , icon=compat.icon('OBJECT_ORIGIN'  ))
-        box.prop(self , 'is_convert_tris'        , icon=compat.icon('MESH_DATA'      ))
-        box.prop(self , 'is_split_sharp'         , icon=compat.icon('MOD_EDGESPLIT'  ))
-        box.prop(prefs, 'skip_shapekey'          , icon=compat.icon('SHAPEKEY_DATA'  ))
-        box.prop(self , 'shapekey_threshold'     , icon=compat.icon('SHAPEKEY_DATA'  ), slider=True)
-        box.prop(self , 'export_tangent'         , icon=compat.icon('CURVE_BEZCIRCLE'))
-        box.prop(self , 'export_shapekey_normals', icon=compat.icon('MOD_NORMALEDIT') )
-        row = box.row()
-        row.prop(self , 'use_shapekey_colors'    , icon=compat.icon('GROUP_VCOL')     )
+        box.prop(self , 'is_align_to_base_bone', icon=compat.icon('OBJECT_ORIGIN'  ))
+        box.prop(self , 'is_convert_tris'      , icon=compat.icon('MESH_DATA'      ))
+        box.prop(self , 'is_split_sharp'       , icon=compat.icon('MOD_EDGESPLIT'  ))
+        box.prop(self , 'export_tangent'       , icon=compat.icon('CURVE_BEZCIRCLE'))
+        sub_box = box.box()
+        sub_box.prop(self , 'shapekey_threshold'     , icon=compat.icon('SHAPEKEY_DATA'      ), slider=True)
+        sub_box.prop(prefs, 'skip_shapekey'          , icon=compat.icon('SHAPEKEY_DATA'      ), toggle=1)
+        sub_box.prop(self , 'export_shapekey_normals', icon=compat.icon('NORMALS_VERTEX_FACE'))
+        row = sub_box.row()
+        row    .prop(self , 'shapekey_normals_blend' , icon=compat.icon('MOD_NORMALEDIT'     ), slider=True)
+        row.enabled = self.export_shapekey_normals
+        row = sub_box.row()
+        row    .prop(self , 'use_shapekey_colors'    , icon=compat.icon('GROUP_VCOL')         , toggle=0)
         row.enabled = self.export_shapekey_normals
         sub_box = box.box()
         sub_box.prop(self, 'is_normalize_weight', icon='MOD_VERTEX_WEIGHT')
@@ -688,9 +693,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                             elif self.use_shapekey_colors and not vcol is None:
                                 no_diff = sk_normal_diffs[i]
                             elif me.has_custom_normals:
-                                no_diff = sk_custom_normals[i] - custom_normals[i]
+                                no_diff = (sk_custom_normals[i] - custom_normals[i]) * self.shapekey_normals_blend
                             else:
-                                no_diff = sk_normals[i].normal - vert.normal
+                                no_diff = (sk_normals[i].normal - vert.normal) * self.shapekey_normals_blend
                             if co_diff.length > co_diff_threshold or no_diff.length_squared > no_diff_threshold_squared:
                                 co = co_diff * self.scale
                                 for d in vert_uvs[i]:
