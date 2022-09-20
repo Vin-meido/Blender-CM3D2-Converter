@@ -718,7 +718,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     shape_key = ob.shape_key_add(name=data['name'], from_mix=False)
                     normals_color = me.vertex_colors.new(name=f"{data['name']}_normals", do_init=False) or me.vertex_colors[-1]
                     for loop_color in normals_color.data:
-                        loop_color.color = [0.5,0.5,0.5,0]
+                        loop_color.color = [0.5,0.5,0.5,1]
                     if len(data['data']) and data['data'][0]['color']:
                         unknown_color = me.vertex_colors.new(name=f"{data['name']}_unknown", do_init=False) or me.vertex_colors[-1]
                     for vert in data['data']:
