@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2022, 9, 20),
+    "version": ("luv", 2022, 9, 22),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -47,6 +47,7 @@ if "bpy" in locals():
     imp.reload(misc_INFO_MT_curve_add)
     imp.reload(misc_INFO_MT_help)
     imp.reload(misc_MATERIAL_PT_context_material)
+    imp.reload(misc_MESH_MT_attribute_context_menu)
     imp.reload(misc_MESH_MT_shape_key_specials)
     imp.reload(misc_MESH_MT_vertex_group_specials)
     imp.reload(misc_OBJECT_PT_context_object)
@@ -95,6 +96,7 @@ else:
     from . import misc_INFO_MT_curve_add
     from . import misc_INFO_MT_help
     from . import misc_MATERIAL_PT_context_material
+    from . import misc_MESH_MT_attribute_context_menu
     from . import misc_MESH_MT_shape_key_specials
     from . import misc_MESH_MT_vertex_group_specials
     from . import misc_OBJECT_PT_context_object
@@ -363,6 +365,7 @@ def register():
         bpy.types.VIEW3D_PT_tools_weightpaint.append(misc_VIEW3D_PT_tools_weightpaint.menu_func)
 
         # menu
+        bpy.types.DATA_PT_vertex_colors.append(misc_MESH_MT_attribute_context_menu.menu_func)
         bpy.types.MESH_MT_shape_key_specials.append(misc_MESH_MT_shape_key_specials.menu_func)
         bpy.types.MESH_MT_vertex_group_specials.append(misc_MESH_MT_vertex_group_specials.menu_func)
         bpy.types.VIEW3D_MT_edit_mesh_specials.append(misc_VIEW3D_MT_edit_mesh_specials.menu_func)
@@ -393,6 +396,11 @@ def register():
         bpy.types.VIEW3D_PT_tools_weightpaint_options.append(misc_VIEW3D_PT_tools_weightpaint.menu_func)
 
         # context menu
+        if bpy.app.version < (3,0):
+            bpy.types.DATA_PT_vertex_colors.append(misc_MESH_MT_attribute_context_menu.menu_func)
+        else:
+            bpy.types.MESH_MT_attribute_context_menu.append(misc_MESH_MT_attribute_context_menu.menu_func)
+            bpy.types.MESH_MT_color_attribute_context_menu.append(misc_MESH_MT_attribute_context_menu.menu_func)
         bpy.types.MESH_MT_shape_key_context_menu.append(misc_MESH_MT_shape_key_specials.menu_func)
         bpy.types.MESH_MT_vertex_group_context_menu.append(misc_MESH_MT_vertex_group_specials.menu_func)
         bpy.types.VIEW3D_MT_edit_mesh_context_menu.append(misc_VIEW3D_MT_edit_mesh_specials.menu_func)
@@ -457,6 +465,7 @@ def unregister():
         bpy.types.VIEW3D_PT_tools_weightpaint.remove(misc_VIEW3D_PT_tools_weightpaint.menu_func)
 
         # menu
+        bpy.types.DATA_PT_vertex_colors.remove(misc_MESH_MT_attribute_context_menu.menu_func)
         bpy.types.MESH_MT_shape_key_specials.remove(misc_MESH_MT_shape_key_specials.menu_func)
         bpy.types.MESH_MT_vertex_group_specials.remove(misc_MESH_MT_vertex_group_specials.menu_func)
         bpy.types.VIEW3D_MT_edit_mesh_specials.remove(misc_VIEW3D_MT_edit_mesh_specials.menu_func)
@@ -480,6 +489,11 @@ def unregister():
 
         bpy.types.VIEW3D_PT_tools_weightpaint_options.remove(misc_VIEW3D_PT_tools_weightpaint.menu_func)
         # menu
+        if bpy.app.version < (3,0):
+            bpy.types.DATA_PT_vertex_colors.remove(misc_MESH_MT_attribute_context_menu.menu_func)
+        else:
+            bpy.types.MESH_MT_attribute_context_menu.remove(misc_MESH_MT_attribute_context_menu.menu_func)
+            bpy.types.MESH_MT_color_attribute_context_menu.remove(misc_MESH_MT_attribute_context_menu.menu_func)
         bpy.types.MESH_MT_shape_key_context_menu.remove(misc_MESH_MT_shape_key_specials.menu_func)
         bpy.types.MESH_MT_vertex_group_context_menu.remove(misc_MESH_MT_vertex_group_specials.menu_func)
         bpy.types.VIEW3D_MT_edit_mesh_context_menu.remove(misc_VIEW3D_MT_edit_mesh_specials.menu_func)

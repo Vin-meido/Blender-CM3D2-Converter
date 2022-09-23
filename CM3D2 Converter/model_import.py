@@ -46,7 +46,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
     is_armature = bpy.props.BoolProperty(name="アーマチュア生成", default=True, description="ウェイトを編集する時に役立つアーマチュアを読み込みます")
     is_armature_clean = bpy.props.BoolProperty(name="不要なボーンを削除", default=False, description="ウェイトが無いボーンを削除します")
     is_custom_bones = bpy.props.BoolProperty(name="Use Custom Bones", default=False, description="Use the currently selected object for custom bone shapes.")
-    is_use_local_bones = bpy.props.BoolProperty(name="Use Local Bones", default=False, description="Use the Local Bone Data for orientation (more accurate)")
+    is_use_local_bones = bpy.props.BoolProperty(name="Use Local Bones", default=True, description="Use the Local Bone Data for orientation (more accurate)")
 
     is_bone_data_text = bpy.props.BoolProperty(name="テキスト", default=True, description="ボーン情報をテキストとして読み込みます")
     is_bone_data_obj_property = bpy.props.BoolProperty(name="オブジェクトのカスタムプロパティ", default=True, description="メッシュオブジェクトのカスタムプロパティにボーン情報を埋め込みます")
@@ -165,8 +165,8 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 bone_count = struct.unpack('<i', reader.read(4))[0]
                 for i in range(bone_count):
                     name = common.read_str(reader)
-                    unknown = struct.unpack('<B', reader.read(1))[0]
-                    bone_data.append({'name': name, 'unknown': unknown})
+                    scl = struct.unpack('<B', reader.read(1))[0]
+                    bone_data.append({'name': name, 'scl': scl})
 
                 for i in range(bone_count):
                     parent_index = struct.unpack('<i', reader.read(4))[0]
@@ -414,7 +414,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     compat.set_bone_matrix(bone, mat)
 
 
-                    bone["UnknownFlag"] = 1 if data['unknown'] else 0
+                    bone["cm3d2_scl_bone"] = 1 if data['scl'] else 0
                     if 'scale' in data:
                         bone['cm3d2_bone_scale'] = data['scale']
                         scale = mathutils.Vector(data['scale'])
@@ -514,7 +514,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     #compat.set_bone_matrix(bone, compat.mul4(fix_mat_scale, fix_mat_before, mat, fix_mat_after))
                     compat.set_bone_matrix(bone, mat)
                     
-                    bone["UnknownFlag"] = 1 if data['unknown'] else 0
+                    bone['cm3d2_scl_bone'] = 1 if data['scl'] else 0
                     if 'scale' in data:
                         bone['cm3d2_bone_scale'] = data['scale']
                         scale = mathutils.Vector(data['scale'])
@@ -524,7 +524,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                         scale *= self.scale * 0.01
                         bone.bbone_x = scale.x
                         bone.bbone_z = scale.z
-                        bone.bbone_segments = scale.y
+                        #bone.bbone_segments = scale.y
                         #look = bone.tail - bone.head
                         #look *= scale.y
                         #bone.tail = look + bone.head
@@ -534,6 +534,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             
             # Configure bones in local bone data
             is_local_bones_corrupt = False
+            base_bone = arm.edit_bones.get(common.decode_bone_name(model_name2, self.is_convert_bone_weight_names))
             for data in local_bone_data:
                 bone = arm.edit_bones.get(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
                 bone.use_deform = True
@@ -546,7 +547,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     pos = mat.translation.copy()
                     
                     mat.transpose()
-                    mat.translation = pos
+                    mat.translation = pos + base_bone.head
                     #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
                     mat = compat.convert_cm_to_bl_bone_rotation(mat)
                     mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
@@ -562,13 +563,17 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                         is_local_bones_corrupt = True
                         #self.report(type={'WARNING'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
             
+            
+            def distOnRay(pos0, pos1, point):
+                w = point - pos0
+                d = (pos1 - pos0).normalized()
+                return w.dot(d) / d.dot(d)
+            
             # ボーン整頓
             for bone in arm.edit_bones:
-                if bone.get('cm3d2_bone_scale'):
-                    continue
                 if len(bone.children) == 0:
                     if bone.parent:
-                        pass
+                        bone.length = bone.parent.length * 0.5
                     else:
                         bone.length = 0.2 * self.scale
                 elif len(bone.children) == 1:
@@ -578,15 +583,16 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     if bone.parent:
                         max_len = 0.0
                         for child_bone in bone.children:
-                            co = child_bone.head - bone.head
-                            if max_len < co.length:
-                                max_len = co.length
+                            if "Pelvis" in bone.name:
+                                dist = (child_bone.head - bone.head).length
+                            else:
+                                dist = distOnRay(bone.head, bone.tail, child_bone.head)
+                            if dist > max_len:
+                                max_len = dist
                         bone.length = max_len
                     else:
                         bone.length = 0.2 * self.scale
             for bone in arm.edit_bones:
-                if bone.get('cm3d2_bone_scale'):
-                    continue
                 if len(bone.children) == 0:
                     if bone.parent:
                         bone.length = bone.parent.length * 0.5
@@ -716,11 +722,22 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                         bpy.ops.object.shape_key_add(from_mix=False)
                         me.shape_keys.name = model_name1
                     shape_key = ob.shape_key_add(name=data['name'], from_mix=False)
-                    normals_color = me.vertex_colors.new(name=f"{data['name']}_normals", do_init=False) or me.vertex_colors[-1]
+
+                    is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
+                    if is_use_attributes:
+                        normals_color = me.attributes.new(f"{data['name']}_delta_normals", 'FLOAT_COLOR', 'CORNER')
+                    else:
+                        normals_color = me.vertex_colors.new(name=f"{data['name']}_delta_normals", do_init=False) or me.vertex_colors[-1]
+                    
                     for loop_color in normals_color.data:
                         loop_color.color = [0.5,0.5,0.5,1]
+
                     if len(data['data']) and data['data'][0]['color']:
-                        unknown_color = me.vertex_colors.new(name=f"{data['name']}_unknown", do_init=False) or me.vertex_colors[-1]
+                        if is_use_attributes:
+                            unknown_color = me.attributes.new(f"{data['name']}_unknown", 'FLOAT_COLOR', 'CORNER')
+                        else:
+                            unknown_color = me.vertex_colors.new(name=f"{data['name']}_unknown", do_init=False) or me.vertex_colors[-1]
+
                     for vert in data['data']:
                         vert_index = vert['index']
                         co = compat.convert_cm_to_bl_space( mathutils.Vector(vert['co']) * self.scale )
@@ -741,7 +758,6 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                                     1,
                                 )
 
-                    # XXX Morph custom-normal data is lost
                     morph_count += 1
             context.window_manager.progress_update(6)
 
@@ -888,7 +904,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             else:
                 txt = context.blend_data.texts.new("BoneData")
         for i, data in enumerate(bone_data):
-            s = ",".join([data['name'], str(data['unknown']), ""])
+            s = ",".join([data['name'], str(data['scl']), ""])
             parent_index = data['parent_index']
             if -1 < parent_index:
                 s += bone_data[parent_index]['name'] + ","

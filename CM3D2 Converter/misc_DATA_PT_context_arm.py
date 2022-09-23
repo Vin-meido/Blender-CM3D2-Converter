@@ -899,8 +899,8 @@ class CNV_PG_cm3d2_bone_morph(bpy.types.PropertyGroup):
                 bone.roll = copyBone.roll
                 bone.show_wire = True
                 bone.use_deform = True
-                copyBone["UnknownFlag"] = False
-                bone["UnknownFlag"] = False
+                copyBone['cm3d2_scl_bone'] = False
+                bone['cm3d2_scl_bone'] = False
                 
                 # rename vertex groups
                 for child in armature.children:
@@ -1856,7 +1856,7 @@ class CNV_OT_cleanup_scale_bones(bpy.types.Operator):
                 continue
             parent = edit_bones.get(bone.name.replace("_SCL_","")) or bone.parent
             if parent:
-                parent["UnknownFlag"] = True
+                parent['cm3d2_scl_bone'] = True
                 deleted_bones[bone.name] = parent.name
                 edit_bones.remove(bone)
 

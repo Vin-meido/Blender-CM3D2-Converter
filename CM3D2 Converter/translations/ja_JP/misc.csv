@@ -177,7 +177,6 @@
 "*","The amount by which the mesh is scaled when imported. Recommended that you use the same when at the time of export.","The amount by which the mesh is scaled when imported. Recommended that you use the same when at the time of export."
 "*","Keep bones with children","Keep bones with children"
 "*","Will not remove scale bones that have children (for custom scale bones)","Will not remove scale bones that have children (for custom scale bones)"
-"*","UnknownFlag","UnknownFlag"
 "*","Save CM3D2 Body Sliders to Menu","Save CM3D2 Body Sliders to Menu"
 "*","Remove scale bones from the active armature object","Remove scale bones from the active armature object"
 "*","Overwrite Existing","Overwrite Existing"

@@ -531,7 +531,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         writer.write(struct.pack('<i', len(bone_data)))
         for bone in bone_data:
             common.write_str(writer, bone['name'])
-            writer.write(struct.pack('<b', bone['unknown']))
+            writer.write(struct.pack('<b', bone['scl']))
         context.window_manager.progress_update(3.3)
         for bone in bone_data:
             writer.write(struct.pack('<i', bone['parent_index']))
@@ -659,7 +659,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                     no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
                         morph = []
-                        vcol = me.vertex_colors[f'{shape_key.name}_normals'].data if f'{shape_key.name}_normals' in me.vertex_colors.keys() else None
+                        vcol = me.vertex_colors[f'{shape_key.name}_delta_normals'].data if f'{shape_key.name}_delta_normals' in me.vertex_colors.keys() else None
                         if not self.export_shapekey_normals:
                             pass
                         elif self.use_shapekey_colors and not vcol is None:
@@ -897,7 +897,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         bone_data = []
         for bone in bones:
 
-            unknown_flag = bone['UnknownFlag'] if 'UnknownFlag' in bone else 0
+            is_scl_bone = bone['cm3d2_scl_bone'] if 'cm3d2_scl_bone' in bone else 0
             parent_index = bone_name_indices[bone.parent.name] if bone.parent else -1
 
             mat = bone.matrix.copy()
@@ -946,7 +946,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
             data = {
                 'name': common.encode_bone_name(bone.name, self.is_convert_bone_weight_names),
-                'unknown': unknown_flag,
+                'scl': is_scl_bone
+,
                 'parent_index': parent_index,
                 'co': co.copy(),
                 'rot': rot.copy(),
@@ -978,7 +979,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
             bone_datum = {
                 'name': data[0],
-                'unknown': int(data[1]),
+                'scl': int(data[1]),
                 'parent_index': parent_index,
                 'co': list(map(float, data[3].split())),
                 'rot': list(map(float, data[4].split())),
