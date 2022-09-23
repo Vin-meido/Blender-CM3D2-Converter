@@ -257,14 +257,18 @@ CM_TO_BL_SPACE_MAT4 = mul(
 BL_TO_CM_SPACE_MAT4 = CM_TO_BL_SPACE_MAT4.inverted()
 CM_TO_BL_SPACE_QUAT = CM_TO_BL_SPACE_MAT4.to_quaternion()
 BL_TO_CM_SPACE_QUAT = BL_TO_CM_SPACE_MAT4.to_quaternion()
-def convert_cm_to_bl_space(x):
+def convert_cm_to_bl_space(x, lossless=True):
     if type(x) == mathutils.Quaternion:
         raise TypeError('Quaternion space conversions not supported')
+    elif lossless and type(x) == mathutils.Vector:
+        return mathutils.Vector((-x.x, -x.z, x.y))
     else:
         return mul(CM_TO_BL_SPACE_MAT4, x)
-def convert_bl_to_cm_space(x):
+def convert_bl_to_cm_space(x, lossless=True):
     if type(x) == mathutils.Quaternion:
         raise TypeError('Quaternion space conversions not supported')
+    elif lossless and type(x) == mathutils.Vector:
+        return mathutils.Vector((-x.x, x.z, -x.y))
     else:
         return mul(BL_TO_CM_SPACE_MAT4, x)
 def convert_cm_to_bl_local_space(x):

@@ -66,7 +66,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
     export_tangent = bpy.props.BoolProperty(name="接空間情報出力", default=False, description="接空間情報(binormals, tangents)を出力する")
 
     
-    shapekey_threshold = bpy.props.FloatProperty(name="Shape Key Threshold", default=0.00150, min=0, soft_min=0.001, max=0.01, soft_max=0.002, precision=5, description="Lower values increase accuracy and file size. Higher values truncate small changes and reduce file size.")
+    shapekey_threshold = bpy.props.FloatProperty(name="Shape Key Threshold", default=0.00100, min=0, soft_min=0.0005, max=0.01, soft_max=0.002, precision=5, description="Lower values increase accuracy and file size. Higher values truncate small changes and reduce file size.")
     export_shapekey_normals = bpy.props.BoolProperty(name="Export Shape Key Normals", default=True, description="Export custom normals for each shape key on export.")
     shapekey_normals_blend = bpy.props.FloatProperty(name="Shape Key Normals Blend", default=0.6, min=0, max=1, precision=3, description="Adjust the influence of shape keys on custom normals")
     use_shapekey_colors = bpy.props.BoolProperty(name="Use Shape Key Colors", default=True, description="Use the shape key normals stored in the vertex colors instead of calculating the normals on export. (Recommend disabling if geometry was customized)")
