@@ -654,7 +654,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         if me.shape_keys:
             try:
                 if 2 <= len(me.shape_keys.key_blocks):
-                    co_diff_threshold = self.shapekey_threshold / self.scale
+                    co_diff_threshold = self.shapekey_threshold / (self.scale * 5) 
+                    co_diff_threshold_squared = co_diff_threshold * co_diff_threshold
                     no_diff_threshold = self.shapekey_threshold * 10
                     no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
                     for shape_key in me.shape_keys.key_blocks[1:]:
@@ -714,7 +715,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                                 no_diff = (sk_custom_normals[i] - custom_normals[i]) * self.shapekey_normals_blend
                             else:
                                 no_diff = (sk_normals[i].normal - vert.normal) * self.shapekey_normals_blend
-                            if co_diff.length > co_diff_threshold or no_diff.length_squared > no_diff_threshold_squared:
+                            if co_diff.length_squared >= co_diff_threshold_squared or no_diff.length_squared >= no_diff_threshold_squared:
                                 co = co_diff * self.scale
                                 for d in vert_uvs[i]:
                                     morph.append((vert_index, co, no_diff))
