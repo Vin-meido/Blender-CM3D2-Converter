@@ -426,7 +426,7 @@ class CNV_OT_quick_shape_key_transfer(shape_key_transfer_op, bpy.types.Operator)
     bl_description = "アクティブなメッシュに他の選択メッシュのシェイプキーを高速で転送します"
     bl_options = {'REGISTER', 'UNDO'}
 
-    step_size = bpy.props.IntProperty(name="Step Size (low = quality, high = speed)", default=4, min=1, max=100, soft_min=1, soft_max=10, step=1)
+    step_size = bpy.props.IntProperty(name="Step Size (low = quality, high = speed)", default=1, min=1, max=100, soft_min=1, soft_max=10, step=1)
 
     near_vert_indexs = []
     my_iter = None
