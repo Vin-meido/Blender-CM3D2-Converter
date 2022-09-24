@@ -654,6 +654,12 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         if me.shape_keys:
             try:
                 if 2 <= len(me.shape_keys.key_blocks):
+                    # accessing operator properties via "self.x" is SLOW, so store some here
+                    self__export_shapekey_normals = self.export_shapekey_normals
+                    self__use_shapekey_colors = self.use_shapekey_colors
+                    self__shapekey_normals_blend = self.shapekey_normals_blend
+                    self__scale = self.scale
+                    
                     co_diff_threshold = self.shapekey_threshold / (self.scale * 5) 
                     co_diff_threshold_squared = co_diff_threshold * co_diff_threshold
                     no_diff_threshold = self.shapekey_threshold * 10
@@ -674,9 +680,9 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                         else:
                             normals_color = me.vertex_colors[f'{shape_key.name}_delta_normals'] if f'{shape_key.name}_delta_normals' in me.vertex_colors.keys() else None
                             attribute_is_color = True
-                        if not self.export_shapekey_normals:
+                        if not self__export_shapekey_normals:
                             pass
-                        elif self.use_shapekey_colors and not normals_color is None:
+                        elif self__use_shapekey_colors and not normals_color is None:
                             sk_normal_diffs = [mathutils.Vector((0,0,0))] * len(me.vertices)
                             sk_normal_diff_count = [0] * len(me.vertices)
                             for loop_index, loop in enumerate(me.loops):
@@ -707,16 +713,16 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                         vert_index = 0
                         for i, vert in enumerate(me.vertices):
                             co_diff = shape_key.data[i].co - vert.co
-                            if not self.export_shapekey_normals:
+                            if not self__export_shapekey_normals:
                                 no_diff = mathutils.Vector((0,0,0))
-                            elif self.use_shapekey_colors and not normals_color is None:
+                            elif self__use_shapekey_colors and not normals_color is None:
                                 no_diff = sk_normal_diffs[i]
                             elif me.has_custom_normals:
-                                no_diff = (sk_custom_normals[i] - custom_normals[i]) * self.shapekey_normals_blend
+                                no_diff = (sk_custom_normals[i] - custom_normals[i]) * self__shapekey_normals_blend
                             else:
-                                no_diff = (sk_normals[i].normal - vert.normal) * self.shapekey_normals_blend
+                                no_diff = (sk_normals[i].normal - vert.normal) * self__shapekey_normals_blend
                             if co_diff.length_squared >= co_diff_threshold_squared or no_diff.length_squared >= no_diff_threshold_squared:
-                                co = co_diff * self.scale
+                                co = co_diff * self__scale
                                 for d in vert_uvs[i]:
                                     morph.append((vert_index, co, no_diff))
                                     vert_index += 1
