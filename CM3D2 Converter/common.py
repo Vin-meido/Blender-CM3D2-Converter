@@ -15,7 +15,7 @@ from . import cm3d2_data
 bl_info = {}
 ADDON_NAME = "CM3D2 Converter"
 BASE_PATH_TEX = "Assets/texture/texture/"
-BRANCH = "bl_28"
+BRANCH = "testing"
 URL_REPOS = "https://github.com/luvoid/Blender-CM3D2-Converter/"
 URL_ATOM = URL_REPOS + "commits/" + BRANCH + ".atom"
 URL_MODULE = URL_REPOS + "archive/" + BRANCH + ".zip"
