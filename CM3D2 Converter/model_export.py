@@ -674,7 +674,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         def find_normals_attribute(name) -> (bpy.types.Attribute, bool):
             if is_use_attributes:
                 normals_color = me.attributes[name] if name in me.attributes.keys() else None
-                attribute_is_color = normals_color.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'}
+                attribute_is_color = (not normals_color is None) and normals_color.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'}
             else:
                 normals_color = me.vertex_colors[name] if name in me.vertex_colors.keys() else None
                 attribute_is_color = True
