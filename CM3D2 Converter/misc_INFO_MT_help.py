@@ -32,7 +32,7 @@ class INFO_MT_help_CM3D2_Converter_RSS(bpy.types.Menu):
 
     def draw(self, context):
         try:
-            response = urllib.request.urlopen(common.URL_ATOM)
+            response = urllib.request.urlopen(common.URL_ATOM.format(branch=common.BRANCH))
             html = response.read().decode('utf-8')
             titles = re.findall(r'\<title\>[　\s]*([^　\s][^\<]*[^　\s])[　\s]*\<\/title\>', html)[1:] # matches: <title> something </title>
             updates = re.findall(r'\<updated\>([^\<\>]*)\<\/updated\>', html)[1:]
@@ -137,20 +137,35 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
     is_restart = bpy.props.BoolProperty(name="更新後にBlenderを再起動", default=compat.IS_LEGACY)
     is_toggle_console = bpy.props.BoolProperty(name="再起動後にコンソールを閉じる", default=True)
 
+    items = [
+        ('current', f_iface_("Current ({branch})", branch=common.BRANCH), ""),
+        ('bl_28'  , "bl_28", ""),
+        ('testing', "testing", ""),
+    ]
+    branch = bpy.props.EnumProperty(items=items, name="Branch", default='current')
+
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
     def draw(self, context):
-        self.layout.menu('INFO_MT_help_CM3D2_Converter_RSS', icon='INFO')
-        self.layout.prop(self, 'is_restart', icon='BLENDER')
-        self.layout.prop(self, 'is_toggle_console', icon='CONSOLE')
+        layout = self.layout
+        layout.menu('INFO_MT_help_CM3D2_Converter_RSS', icon='INFO')
+        layout.separator()
+        layout.prop(self, 'branch')
+        col = layout.column()
+        col.prop(self, 'is_restart', icon='BLENDER')
+        row = col.row()
+        row.prop(self, 'is_toggle_console', icon='CONSOLE')
+        row.enabled = self.is_restart
 
     def execute(self, context):
-
-        zip_path = os.path.join(bpy.app.tempdir, "Blender-CM3D2-Converter-" + common.BRANCH + ".zip")
+        branch = self.branch
+        if branch == 'current':
+            branch = common.BRANCH
+        zip_path = os.path.join(bpy.app.tempdir, f"Blender-CM3D2-Converter-{branch}.zip")
         addon_path = os.path.dirname(__file__)
 
-        response = urllib.request.urlopen(common.URL_MODULE)
+        response = urllib.request.urlopen(common.URL_MODULE.format(branch=branch))
         zip_file = open(zip_path, 'wb')
         zip_file.write(response.read())
         zip_file.close()
