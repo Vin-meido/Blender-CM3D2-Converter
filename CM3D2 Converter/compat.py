@@ -6,6 +6,7 @@ import struct
 import os
 import mathutils
 import traceback
+import numpy as np
 from typing import Any, Optional
 
 
@@ -267,8 +268,8 @@ def convert_cm_to_bl_space(x, lossless=True):
 def convert_bl_to_cm_space(x, lossless=True):
     if type(x) == mathutils.Quaternion:
         raise TypeError('Quaternion space conversions not supported')
-    elif lossless and type(x) == mathutils.Vector:
-        return mathutils.Vector((-x.x, x.z, -x.y))
+    elif lossless and len(x) == 3:
+        return mathutils.Vector((-x[0], x[2], -x[1]))
     else:
         return mul(BL_TO_CM_SPACE_MAT4, x)
 def convert_cm_to_bl_local_space(x):

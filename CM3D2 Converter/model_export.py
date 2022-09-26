@@ -651,100 +651,164 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         context.window_manager.progress_update(9)
 
         # モーフを書き出し
-        if me.shape_keys:
+        if me.shape_keys and len(me.shape_keys.key_blocks) >= 2:
             try:
-                if 2 <= len(me.shape_keys.key_blocks):
-                    # accessing operator properties via "self.x" is SLOW, so store some here
-                    self__export_shapekey_normals = self.export_shapekey_normals
-                    self__use_shapekey_colors = self.use_shapekey_colors
-                    self__shapekey_normals_blend = self.shapekey_normals_blend
-                    self__scale = self.scale
-                    
-                    co_diff_threshold = self.shapekey_threshold / (self.scale * 5) 
-                    co_diff_threshold_squared = co_diff_threshold * co_diff_threshold
-                    no_diff_threshold = self.shapekey_threshold * 10
-                    no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
-                    for shape_key in me.shape_keys.key_blocks[1:]:
-                        morph = []
-                        is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
-                        if is_use_attributes:
-                            normals_color = me.attributes[f'{shape_key.name}_delta_normals'] if f'{shape_key.name}_delta_normals' in me.attributes.keys() else None
-                            if isinstance(normals_color, bpy.types.ByteColorAttribute):
-                                attribute_is_color = True
-                            elif isinstance(normals_color, bpy.types.FloatColorAttribute):
-                                attribute_is_color = True
-                            elif isinstance(normals_color, bpy.types.FloatVectorAttribute):
-                                attribute_is_color = False
-                            else:
-                                normals_color = None
-                        else:
-                            normals_color = me.vertex_colors[f'{shape_key.name}_delta_normals'] if f'{shape_key.name}_delta_normals' in me.vertex_colors.keys() else None
-                            attribute_is_color = True
-                        if not self__export_shapekey_normals:
-                            pass
-                        elif self__use_shapekey_colors and not normals_color is None:
-                            sk_normal_diffs = [mathutils.Vector((0,0,0))] * len(me.vertices)
-                            sk_normal_diff_count = [0] * len(me.vertices)
-                            for loop_index, loop in enumerate(me.loops):
-                                delta_normal = mathutils.Vector((0,0,0))
-                                if attribute_is_color:
-                                    delta_normal = mathutils.Vector(normals_color.data[loop_index].color[:3])
-                                else:
-                                    delta_normal = mathutils.Vector(normals_color.data[loop_index].vector)
-                                to_add = (delta_normal - mathutils.Vector((.5,.5,.5))) * 2
-                                sk_normal_diffs[loop.vertex_index] = sk_normal_diffs[loop.vertex_index] + to_add
-                                sk_normal_diff_count[loop.vertex_index] += 1
-                            for i, count in enumerate(sk_normal_diff_count):
-                                if count <= 0:
-                                    continue
-                                sk_normal_diffs[i] *= (1/count)
-                        elif me.has_custom_normals:
-                            sk_custom_normals = [mathutils.Vector((0,0,0))] * len(me.vertices)
-                            sk_custom_split_normals = np.array(shape_key.normals_split_get(), copy=False).reshape((len(me.loops), 3))
-                            for loop_index, loop in enumerate(me.loops):
-                                to_add = mathutils.Vector(sk_custom_split_normals[loop_index])
-                                sk_custom_normals[loop.vertex_index] = sk_custom_normals[loop.vertex_index] + to_add
-                            for i, no in enumerate(sk_custom_normals):
-                                no.normalize()
-                        else:
-                            sk_normals_array = np.array(shape_key.normals_vertex_get(), copy=False)
-                            sk_normals_array = sk_normals_array.reshape((len(me.loops), 3))
-                            sk_normals = [mathutils.Vector(row) for row in sk_normals_array]
-                        vert_index = 0
-                        for i, vert in enumerate(me.vertices):
-                            co_diff = shape_key.data[i].co - vert.co
-                            if not self__export_shapekey_normals:
-                                no_diff = mathutils.Vector((0,0,0))
-                            elif self__use_shapekey_colors and not normals_color is None:
-                                no_diff = sk_normal_diffs[i]
-                            elif me.has_custom_normals:
-                                no_diff = (sk_custom_normals[i] - custom_normals[i]) * self__shapekey_normals_blend
-                            else:
-                                no_diff = (sk_normals[i].normal - vert.normal) * self__shapekey_normals_blend
-                            if co_diff.length_squared >= co_diff_threshold_squared or no_diff.length_squared >= no_diff_threshold_squared:
-                                co = co_diff * self__scale
-                                for d in vert_uvs[i]:
-                                    morph.append((vert_index, co, no_diff))
-                                    vert_index += 1
-                            else:
-                                # ignore because change is too small (greatly lowers file size)
-                                vert_index += len(vert_uvs[i])
-
-                        if prefs.skip_shapekey and not len(morph):
-                            continue
-                        common.write_str(writer, 'morph')
-                        common.write_str(writer, shape_key.name)
-                        writer.write(struct.pack('<i', len(morph)))
-                        for v_index, vec, normal in morph:
-                            vec    = compat.convert_bl_to_cm_space(vec   )
-                            normal = compat.convert_bl_to_cm_space(normal)
-                            writer.write(struct.pack('<H', v_index))
-                            writer.write(struct.pack('<3f', vec.x, vec.y, vec.z))
-                            writer.write(struct.pack('<3f', normal.x, normal.y, normal.z))
+                self.write_shapekeys(context, ob, writer, vert_uvs)
             finally:
                 print("FINISHED SHAPE KEYS WRITE")
                 pass
         common.write_str(writer, 'end')
+
+    def write_shapekeys(self, context, ob, writer, vert_uvs):
+        # モーフを書き出し
+        me = ob.data
+        prefs = common.preferences()
+        
+        is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
+
+        loops_per_vertex = np.zeros((len(me.vertices)))
+        for loop in me.loops:
+            loops_per_vertex[loop.vertex_index] += 1
+
+        # accessing operator properties via "self.x" is SLOW, so store some here
+        self__export_shapekey_normals = self.export_shapekey_normals
+        self__use_shapekey_colors = self.use_shapekey_colors
+        self__shapekey_normals_blend = self.shapekey_normals_blend
+        self__scale = self.scale
+        
+        co_diff_threshold = self.shapekey_threshold / (self.scale * 5) 
+        co_diff_threshold_squared = co_diff_threshold * co_diff_threshold
+        no_diff_threshold = self.shapekey_threshold * 10
+        no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
+
+        def find_normals_attribute(name) -> (bpy.types.Attribute, bool):
+            if is_use_attributes:
+                normals_color = me.attributes[name] if name in me.attributes.keys() else None
+                if isinstance(normals_color, bpy.types.ByteColorAttribute):
+                    attribute_is_color = True
+                elif isinstance(normals_color, bpy.types.FloatColorAttribute):
+                    attribute_is_color = True
+                elif isinstance(normals_color, bpy.types.FloatVectorAttribute):
+                    attribute_is_color = False
+                else:
+                    normals_color = None
+            else:
+                normals_color = me.vertex_colors[name] if name in me.vertex_colors.keys() else None
+                attribute_is_color = True
+            return normals_color, attribute_is_color
+
+        static_attribute_colors = np.empty((len(me.loops), 4), dtype=float)
+        color_offset = np.array([[0.5,0.5,0.5]])
+        static_normals_list = np.empty((len(me.vertices), 3))
+        loops_vert_index = np.empty((len(me.loops)), dtype=int)
+        me.loops.foreach_get('vertex_index', loops_vert_index.ravel())
+        def get_sk_delta_normals(attribute, is_color):
+            if is_color:
+                attribute.data.foreach_get('color', static_attribute_colors.ravel())
+                loop_delta_normals = static_attribute_colors[:,:3]
+                loop_delta_normals *= 2
+                loop_delta_normals -= color_offset
+            else:
+                pass
+            
+            static_normals_list.fill(0)
+            vert_delta_normals = static_normals_list
+
+            # for loop in me.loops: vert_delta_normals[loop.vertex_index] += loop_delta_normals[loop.index]
+            np.add.at(vert_delta_normals, loops_vert_index, loop_delta_normals) 
+            
+            # for delta_normal in delta_normals: delta_normal /= loops_per_vertex
+            vert_delta_normals *= np.reciprocal(loops_per_vertex.reshape((*loops_per_vertex.shape, 1)))
+
+            return vert_delta_normals #.tolist()
+
+        def calc_sk_custom_normals(shape_key):
+            sk_custom_normals = [mathutils.Vector((0,0,0))] * len(me.vertices)
+            sk_custom_split_normals = np.array(shape_key.normals_split_get(), copy=False).reshape((len(me.loops), 3))
+            for loop_index, loop in enumerate(me.loops):
+                to_add = mathutils.Vector(sk_custom_split_normals[loop_index])
+                sk_custom_normals[loop.vertex_index] = sk_custom_normals[loop.vertex_index] + to_add
+                #sk_custom_normals[loop.vertex_index,:] = sk_custom_normals[loop.vertex_index,:] + to_add
+            for i, no in enumerate(sk_custom_normals):
+                no.normalize()
+            return sk_custom_normals
+
+        def calc_sk_normals(shape_key):
+            sk_normals_array = np.array(shape_key.normals_vertex_get(), copy=False)
+            sk_normals_array = sk_normals_array.reshape((len(me.loops), 3))
+            sk_normals = [mathutils.Vector(row) for row in sk_normals_array]
+
+        basis_co = np.empty((len(me.vertices), 3), dtype=float)
+        me.vertices.foreach_get('co', basis_co.ravel())
+        static_delta_co = np.empty((len(me.vertices), 3), dtype=float)
+        def get_sk_delta_coordinates(shape_key):
+            delta_coordinates = static_delta_co
+            shape_key.data.foreach_get('co', delta_coordinates.ravel())
+            delta_coordinates -= basis_co
+            return delta_coordinates
+
+
+        static_array_sq = np.empty((len(me.vertices), 3), dtype=float)
+        static_delta_co_lensq = np.empty((len(me.vertices)), dtype=float)
+        static_delta_no_lensq = np.empty((len(me.vertices)), dtype=float)
+        def get_lengths_squared(vectors, out):
+            np.multiply(vectors, vectors, out=static_array_sq)
+            np.sum(static_array_sq, axis=1, out=out)
+            return out
+
+        def write_morph(morph, name):
+            common.write_str(writer, 'morph')
+            common.write_str(writer, name)
+            writer.write(struct.pack('<i', len(morph)))
+            for v_index, vec, normal in morph:
+                vec    = compat.convert_bl_to_cm_space(vec   ) * self__scale
+                normal = compat.convert_bl_to_cm_space(normal)
+                writer.write(struct.pack('<H', v_index))
+                writer.write(struct.pack('<3f', *vec[:3]))
+                writer.write(struct.pack('<3f', *normal[:3]))
+
+        for shape_key in me.shape_keys.key_blocks[1:]:
+            morph = []
+
+            if self__export_shapekey_normals and self__use_shapekey_colors:
+                normals_color, attrubute_is_color = find_normals_attribute(f'{shape_key.name}_delta_normals')
+
+            if not self__export_shapekey_normals:
+                pass
+            elif self__use_shapekey_colors and not normals_color is None:
+                sk_delta_normals = get_sk_delta_normals(normals_color, attrubute_is_color)
+            elif me.has_custom_normals:
+                sk_custom_normals = calc_sk_custom_normals(shape_key)
+            else:
+                sk_normals = calc_sk_normals(shape_key)
+            
+            sk_no_lensq = get_lengths_squared(sk_delta_normals, out=static_delta_no_lensq)
+
+            sk_co_diffs = get_sk_delta_coordinates(shape_key)
+            sk_co_lensq = get_lengths_squared(sk_co_diffs, out=static_delta_co_lensq)
+
+            vert_index = 0
+            for i, vert in enumerate(me.vertices):
+                #if not self__export_shapekey_normals:
+                #    no_diff = mathutils.Vector((0,0,0))
+                #elif self__use_shapekey_colors and not normals_color is None:
+                #    pass
+                #    #no_diff = mathutils.Vector(sk_delta_normals[i])
+                #elif me.has_custom_normals:
+                #    no_diff = (sk_custom_normals[i] - custom_normals[i]) * self__shapekey_normals_blend
+                #else:
+                #    no_diff = (sk_normals[i].normal - vert.normal) * self__shapekey_normals_blend
+                if sk_co_lensq[i] >= co_diff_threshold_squared or sk_no_lensq[i] >= no_diff_threshold_squared:
+                    morph += [(vert_index, sk_co_diffs[i], sk_delta_normals[i])] * len(vert_uvs[i])
+                else:
+                    # ignore because change is too small (greatly lowers file size)
+                    pass
+                vert_index += len(vert_uvs[i])
+
+            if prefs.skip_shapekey and not len(morph):
+                continue
+            else:
+                write_morph(morph, shape_key.name)
 
     def write_tangents(self, writer, me):
         if len(me.uv_layers) < 1:
