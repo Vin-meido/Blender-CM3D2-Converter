@@ -767,7 +767,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         self__shapekey_normals_blend = self.shapekey_normals_blend
         self__scale = self.scale
         
-        co_diff_threshold = self.shapekey_threshold / (self.scale * 5) 
+        co_diff_threshold = self.shapekey_threshold / 5
         co_diff_threshold_squared = co_diff_threshold * co_diff_threshold
         no_diff_threshold = self.shapekey_threshold * 10
         no_diff_threshold_squared = no_diff_threshold * no_diff_threshold
@@ -807,18 +807,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 sk_no_lensq = delta_no_lensq
 
             sk_co_diffs = get_sk_delta_coordinates(shape_key, out=delta_coordinates)
+            sk_co_diffs *= self__scale # scale before getting lengths
             sk_co_lensq = get_lengths_squared(sk_co_diffs, out=delta_co_lensq)
 
-            # sk_co_diffs can be scaled AFTER their square lengths is calculated
-            sk_co_diffs *= self__scale
-
-            # TODO Consider calling compat.convert_bl_to_cm_space on the entierty of both arrays here.
+            # TODO Consider calling compat.convert_bl_to_cm_space on the entierity of both arrays here.
             
             # SUPER HEAVY LOOP
             vert_index = 0
             for i, vert in enumerate(me.vertices):
                 if sk_co_lensq[i] >= co_diff_threshold_squared or sk_no_lensq[i] >= no_diff_threshold_squared:
-                    morph += [(vert_index, sk_co_diffs[i], sk_delta_normals[i])] * len(vert_uvs[i])
+                    # XXX This method caused distortion on seam lines
+                    #morph += [(vert_index, sk_co_diffs[i], sk_delta_normals[i])] * len(vert_uvs[i])
+                    # This might work better
+                    morph += [ (vert_index+j, sk_co_diffs[i], sk_delta_normals[i]) for j in range(len(vert_uvs[i])) ]
                 else:
                     # ignore because change is too small (greatly lowers file size)
                     pass
@@ -1054,8 +1055,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
             data = {
                 'name': common.encode_bone_name(bone.name, self.is_convert_bone_weight_names),
-                'scl': is_scl_bone
-,
+                'scl': is_scl_bone,
                 'parent_index': parent_index,
                 'co': co.copy(),
                 'rot': rot.copy(),
