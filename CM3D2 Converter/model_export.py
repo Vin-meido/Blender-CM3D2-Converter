@@ -694,13 +694,15 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 loop_delta_normals -= color_offset
                 loop_delta_normals *= 2
             else:
-                pass
+                loop_delta_normals = static_attribute_colors[:,:3]
+                attribute.data.foreach_get('vector', loop_delta_normals.ravel())
             
             vert_delta_normals = out
             vert_delta_normals.fill(0)
 
             # for loop in me.loops: vert_delta_normals[loop.vertex_index] += loop_delta_normals[loop.index]
-            np.add.at(vert_delta_normals, loops_vert_index, loop_delta_normals) 
+            np.add.at(vert_delta_normals, loops_vert_index, loop_delta_normals) # XXX Slower but handles edge cases better
+            #vert_delta_normals[loops_vert_index] += loop_delta_normals # XXX Only first loop's value will be kept
             
             # for delta_normal in vert_delta_normals: delta_normal /= loops_per_vertex[vert.index]
             vert_delta_normals *= loops_per_vertex_reciprocal
@@ -742,7 +744,6 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             shape_key.data.foreach_get('co', delta_coordinates.ravel())
             delta_coordinates -= basis_co
             return out
-
 
         static_array_sq = np.empty((len(me.vertices), 3), dtype=float)
         def get_lengths_squared(vectors, out):
@@ -810,20 +811,15 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             sk_co_diffs *= self__scale # scale before getting lengths
             sk_co_lensq = get_lengths_squared(sk_co_diffs, out=delta_co_lensq)
 
-            # TODO Consider calling compat.convert_bl_to_cm_space on the entierity of both arrays here.
-            
             # SUPER HEAVY LOOP
-            vert_index = 0
-            for i, vert in enumerate(me.vertices):
+            outvert_index = 0
+            for i in range(len(me.vertices)):
                 if sk_co_lensq[i] >= co_diff_threshold_squared or sk_no_lensq[i] >= no_diff_threshold_squared:
-                    # XXX This method caused distortion on seam lines
-                    #morph += [(vert_index, sk_co_diffs[i], sk_delta_normals[i])] * len(vert_uvs[i])
-                    # This might work better
-                    morph += [ (vert_index+j, sk_co_diffs[i], sk_delta_normals[i]) for j in range(len(vert_uvs[i])) ]
+                    morph += [ (outvert_index+j, sk_co_diffs[i], sk_delta_normals[i]) for j in range(len(vert_uvs[i])) ]
                 else:
                     # ignore because change is too small (greatly lowers file size)
                     pass
-                vert_index += len(vert_uvs[i])
+                outvert_index += len(vert_uvs[i])
 
             if prefs.skip_shapekey and not len(morph):
                 continue
