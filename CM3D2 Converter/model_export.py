@@ -667,7 +667,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         prefs = common.preferences()
         
         is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
-        
+
         loops_vert_index = np.empty((len(me.loops)), dtype=int)
         me.loops.foreach_get('vertex_index', loops_vert_index.ravel())
 
@@ -711,12 +711,14 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         if me.has_custom_normals:
             basis_custom_normals = np.array(custom_normals, dtype=float)
+            static_loop_normals = np.empty((len(me.loops), 3), dtype=float)
             static_vert_lengths = np.empty((len(me.vertices), 1), dtype=float)
         def get_sk_delta_normals_from_custom_normals(shape_key, out):
             vert_custom_normals = out
             vert_custom_normals.fill(0)
             
-            loop_custom_normals = np.array(shape_key.normals_split_get(), copy=False).reshape((len(me.loops), 3))
+            loop_custom_normals = static_loop_normals
+            np.copyto(loop_custom_normals.ravel(), shape_key.normals_split_get())
             
             # for loop in me.loops: vert_delta_normals[loop.vertex_index] += loop_delta_normals[loop.index]
             np.add.at(vert_custom_normals, loops_vert_index, loop_custom_normals)
@@ -732,7 +734,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             basis_normals = np.empty((len(me.vertices), 3), dtype=float)
             me.vertices.foreach_get('normal', basis_normals.ravel())
         def get_sk_delta_normals_from_normals(shape_key, out):
-            vert_normals = np.array(shape_key.normals_vertex_get(), copy=False)
+            vert_normals = out
+            vert_normals = np.copyto(vert_normals.ravel(), shape_key.normals_vertex_get())
             vert_normals = vert_normals.reshape((len(me.vertices), 3))
             vert_delta_normals = np.subtract(vert_normals, basis_normals, out=out)
             return out
