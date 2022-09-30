@@ -721,12 +721,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             np.copyto(loop_custom_normals.ravel(), shape_key.normals_split_get())
             
             # for loop in me.loops: vert_delta_normals[loop.vertex_index] += loop_delta_normals[loop.index]
-            np.add.at(vert_custom_normals, loops_vert_index, loop_custom_normals)
+            if not self.split_sharp:  
+                # XXX Slower
+                np.add.at(vert_custom_normals, loops_vert_index, loop_custom_normals)
+                vert_len_sq = get_lengths_squared(vert_custom_normals, out=static_vert_lengths)
+                vert_len = np.sqrt(vert_len_sq, out=vert_len_sq)
+                np.reciprocal(vert_len, out=vert_len)
+                vert_custom_normals *= vert_len #.reshape((*vert_len.shape, 1))
+            else:
+                # loop normals should be the same per-vertex unless there is a sharp edge 
+                # or a flat shaded face, but all sharp edges were split, so this method is fine
+                # (and Flat shaded faces just won't be supported)
+                vert_custom_normals[loops_vert_index] += loop_custom_normals # Only first loop's value will be kept
 
-            vert_len_sq = get_lengths_squared(vert_custom_normals, out=static_vert_lengths)
-            vert_len = np.sqrt(vert_len_sq, out=vert_len_sq)
-            np.reciprocal(vert_len, out=vert_len)
-            vert_custom_normals *= vert_len #.reshape((*vert_len.shape, 1))
             vert_custom_normals -= basis_custom_normals
             return out
         
