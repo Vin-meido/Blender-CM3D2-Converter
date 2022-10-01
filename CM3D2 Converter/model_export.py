@@ -721,7 +721,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             np.copyto(loop_custom_normals.ravel(), shape_key.normals_split_get())
             
             # for loop in me.loops: vert_delta_normals[loop.vertex_index] += loop_delta_normals[loop.index]
-            if not self.split_sharp:  
+            if not self.is_split_sharp:  
                 # XXX Slower
                 np.add.at(vert_custom_normals, loops_vert_index, loop_custom_normals)
                 vert_len_sq = get_lengths_squared(vert_custom_normals, out=static_vert_lengths)
@@ -742,8 +742,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             me.vertices.foreach_get('normal', basis_normals.ravel())
         def get_sk_delta_normals_from_normals(shape_key, out):
             vert_normals = out
-            vert_normals = np.copyto(vert_normals.ravel(), shape_key.normals_vertex_get())
-            vert_normals = vert_normals.reshape((len(me.vertices), 3))
+            np.copyto(vert_normals.ravel(), shape_key.normals_vertex_get())
             vert_delta_normals = np.subtract(vert_normals, basis_normals, out=out)
             return out
 
