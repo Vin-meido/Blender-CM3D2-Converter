@@ -1,4 +1,4 @@
-# XXX : This file is not used
+import numpy as np
 import bpy
 import bmesh
 from . import common
@@ -18,12 +18,11 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
     bl_description = "Remove doubles while marking merged geometry as seams and/or sharp edges"
     bl_options = {'REGISTER', 'UNDO'}
 
-    threshold        = bpy.props.FloatProperty(name="Merge Distance", default=0.0001, description="Maximum distance between elements to merge")
-    normal_threshold = bpy.props.FloatProperty(name="Normal Angle"  , default=0.0000, description="Maximum angle between element's normals to mark sharp")
-    use_unselected   = bpy.props.BoolProperty(name="Unselected"    , default=False , description="Merge selected to other unselected vertices")
-    mark_seams       = bpy.props.BoolProperty(name="Mark Seams"    , default=True  , description="Mark seams")
-    mark_sharp       = bpy.props.BoolProperty(name="Mark Sharp"    , default=True  , description="Mark sharp")
-    mark_freestyle   = bpy.props.BoolProperty(name="Mark Freestyle", default=True  , description="Mark freestyle")
+    threshold           = bpy.props.FloatProperty(name="Merge Distance"    , default=0.0001, description="Maximum distance between elements to merge")
+    normal_threshold    = bpy.props.FloatProperty(name="Normal Angle"      , default=0.0000, description="Maximum angle between element's normals to mark sharp")
+    use_unselected      = bpy.props.BoolProperty(name="Unselected"         , default=False , description="Merge selected to other unselected vertices")
+    keep_custom_normals = bpy.props.BoolProperty(name="Keep Custom Normals", default=True  , description="Keep custom split normals")
+    mark_sharp          = bpy.props.BoolProperty(name="Mark Sharp"         , default=True  , description="Mark sharp")
     
     @classmethod
     def poll(cls, context):
@@ -33,9 +32,6 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
     def execute(self, context):
         ob = context.active_object
         me = ob.data
-
-        #bpy.ops.mesh.select_all(action='DESELECT')
-
         bm = bmesh.from_edit_mesh(me)
 
         selected_verts = bm.verts if len(bm.select_history) <= 0 else set( filter(lambda v : v.select, bm.verts) )
@@ -43,54 +39,40 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
         
         targetmap = bmesh.ops.find_doubles(bm, verts=search_verts, dist=self.threshold,
             keep_verts=selected_verts if self.use_unselected else list())['targetmap']
-        
-        print(targetmap)
-        return {'FINISHED'}
-
-        comparison_data = list(hash(repr(v['co']) + " " + repr(v['normal'])) for v in vertex_data)
-        comparison_counter = Counter(comparison_data)
-        comparison_data = list((comparison_counter[h] > 1) for h in comparison_data)
-        del comparison_counter
 
         selected_edges = bm.edges if len(bm.select_history) <= 0 else set( filter(lambda e : e.verts[0].select or e.verts[1].select, bm.edges) )
-
+        
         # メッシュ整頓
-        pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
-        if self.is_sharp:
-            context.tool_settings.mesh_select_mode = (False, True, False)
-            bpy.ops.object.mode_set(mode='EDIT')
-        
-            bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
-            bpy.ops.mesh.mark_sharp(use_verts=False)
-        
-            bpy.ops.object.mode_set(mode='OBJECT')
-            context.tool_settings.mesh_select_mode = pre_mesh_select_mode
-        if self.is_remove_doubles:
-            pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
-            context.tool_settings.mesh_select_mode = (True, False, False)
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-        
-            for is_comparison, vert in zip(comparison_data, me.vertices):
-                if is_comparison:
-                    vert.select = True
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.remove_doubles(threshold=0.000001)
-        
-            if self.is_sharp:
-                context.tool_settings.mesh_select_mode = (False, True, False)
-                bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
-                bpy.ops.mesh.mark_sharp(use_verts=False)
-        
-            bpy.ops.object.mode_set(mode='OBJECT')
-        context.tool_settings.mesh_select_mode = pre_mesh_select_mode
-        if self.is_seam:
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.uv.select_all(action='SELECT')
-            bpy.ops.uv.seams_from_islands()
+        if me.has_custom_normals:
+            layer = bm.loops.layers.float_vector.new('custom_normals.temp')
+            set_bmlayer_from_custom_normals(bm, layer, me)
 
+        if self.is_sharp:
+            pass
         
+        # Remove Doubles
+        bmesh.ops.weld_verts(bm, targetmap=targetmap)
+        bmesh.update_edit_mesh(me)
+
+        if me.has_custom_normals:
+            if self.keep_custom_normals:
+                set_custom_normals_from_bmlayer(bm, layer, me)
+            bm.loops.layers.float_vector.remove(layer)
+            bmesh.update_edit_mesh(me)
         
         return {'FINISHED'}
+
+    @staticmethod
+    def set_bmlayer_from_custom_normals(bm, layer, me):
+        me.calc_normals_split()
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[layer] = me.loops[loop.index].normal
+      
+    @staticmethod          
+    def set_custom_normals_from_bmlayer(bm, layer, me):
+        custom_normals = np.zeros((len(me.loops), 3))
+        for face in bm.faces:
+            for loop in face.loops:
+                custom_normals[loop.index] = loop[layer]
+        me.normals_split_custom_set(custom_normals)

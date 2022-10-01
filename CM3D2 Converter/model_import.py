@@ -618,147 +618,18 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         context.window_manager.progress_update(2)
 
         if self.is_mesh:
-            # メッシュ作成
-            me = context.blend_data.meshes.new(model_name1)
-            verts, faces = [], []
-            for data in vertex_data:
-                #co = list(data['co'][:])
-                #co[0] = -co[0]
-                #co[0] *= self.scale
-                #co[1] *= self.scale
-                #co[2] *= self.scale
-                co = compat.convert_cm_to_bl_space( mathutils.Vector(data['co']) * self.scale )
-                #co = mathutils.Vector(data['co']) * self.scale
-                verts.append(co)
-            context.window_manager.progress_update(2.25)
-            for data in face_data:
-                faces.extend(data)
-            context.window_manager.progress_update(2.5)
-            me.from_pydata(verts, [], faces)
-            # オブジェクト化
-            ob = context.blend_data.objects.new(model_name1, me)
-            ob.rotation_mode = 'QUATERNION'
-            compat.link(context.scene, ob)
-            compat.set_select(ob, True)
-            compat.set_active(context, ob)
-            bpy.ops.object.shade_smooth()
-            context.window_manager.progress_update(2.75)
+            ob, me = self.create_mesh(context, model_name1, vertex_data, face_data)
             # オブジェクト変形
             CNV_OT_align_to_cm3d2_base_bone.from_bone_data(ob=ob, bone_data=bone_data, base_bone_name=model_name2, scale=self.scale)
             context.window_manager.progress_update(3)
-
-            # 頂点グループ作成
-            for data in local_bone_data:
-                ob.vertex_groups.new(name=common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
-            context.window_manager.progress_update(3.333)
-            for vert_index, data in enumerate(vertex_data):
-                for weight in data['weights']:
-                    if 0.0 < weight['value']:
-                        vertex_group = ob.vertex_groups[common.decode_bone_name(weight['name'], self.is_convert_bone_weight_names)]
-                        vertex_group.add([vert_index], weight['value'], 'REPLACE')
-            context.window_manager.progress_update(3.666)
-            if self.is_vertex_group_sort:
-                bpy.ops.object.vertex_group_sort(sort_type='NAME')
-            if self.is_remove_empty_vertex_group:
-                for vg in ob.vertex_groups[:]:
-                    for vert in me.vertices:
-                        for group in vert.groups:
-                            if group.group == vg.index:
-                                if 0.0 < group.weight:
-                                    break
-                        else:
-                            continue
-                        break
-                    else:
-                        ob.vertex_groups.remove(vg)
-            ob.vertex_groups.active_index = 0
+            
+            self.create_uvs(context, me, vertex_data, extra_uv_uses)
             context.window_manager.progress_update(4)
 
-            # UV作成
-            bm = bmesh.new()
-            bm.from_mesh(me)
-            bm.loops.layers.uv.new(f_data_("MainUV"))
-            vert_loops = {}
-            for i, used in enumerate(extra_uv_uses):    
-                if used:
-                    bm.loops.layers.uv.new(f_data_("ExtraUV{num}", num=i))
-            for face in bm.faces:
-                for loop in face.loops:
-                    vert_loops.setdefault(loop.vert.index, []).append(loop.index)
-                    loop[bm.loops.layers.uv[0]].uv = vertex_data[loop.vert.index]['uv']
-                    for extra_uv_index, extra_uv in enumerate(vertex_data[loop.vert.index]['extra_uvs']):
-                        loop[bm.loops.layers.uv[extra_uv_index+1]].uv = extra_uv
-            bm.to_mesh(me)
-            bm.free()
+            self.create_vertex_groups(context, ob, vertex_data, local_bone_data)
             context.window_manager.progress_update(5)
 
-            # Custom Split Normals
-            #normals_color = me.vertex_colors.new(name=f"Basis_normals", do_init=False) or me.vertex_colors[-1]
-            #for vert_index, vert in enumerate(vertex_data):
-            #    no = compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) ) #mathutils.Vector(vert['normal']) * mathutils.Vector((-1,1,1)) #
-            #    no.normalize()
-            #    print(no)
-            #    for loop_index in vert_loops[vert_index]:
-            #        #normals[loop_index] = no
-            #        normals_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
-            #            *no, #*(no * 0.5 + mathutils.Vector([0.5]*3)),
-            #            1,
-            #        )
-            #me.normals_split_custom_set(normals)
-            me.normals_split_custom_set_from_vertices(
-                tuple(
-                    compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) )
-                    for vert in vertex_data
-                )
-            )
-            me.use_auto_smooth = True
-
-
-            # モーフ追加
-            morph_count = 0
-            for data in misc_data:
-                if data['type'] == 'morph':
-                    if morph_count == 0:
-                        bpy.ops.object.shape_key_add(from_mix=False)
-                        me.shape_keys.name = model_name1
-                    shape_key = ob.shape_key_add(name=data['name'], from_mix=False)
-
-                    is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
-                    if is_use_attributes:
-                        normals_color = me.attributes.new(f"{data['name']}_delta_normals", 'FLOAT_COLOR', 'CORNER')
-                    else:
-                        normals_color = me.vertex_colors.new(name=f"{data['name']}_delta_normals", do_init=False) or me.vertex_colors[-1]
-                    
-                    for loop_color in normals_color.data:
-                        loop_color.color = [0.5,0.5,0.5,1]
-
-                    if len(data['data']) and data['data'][0]['color']:
-                        if is_use_attributes:
-                            unknown_color = me.attributes.new(f"{data['name']}_unknown", 'FLOAT_COLOR', 'CORNER')
-                        else:
-                            unknown_color = me.vertex_colors.new(name=f"{data['name']}_unknown", do_init=False) or me.vertex_colors[-1]
-
-                    for vert in data['data']:
-                        vert_index = vert['index']
-                        co = compat.convert_cm_to_bl_space( mathutils.Vector(vert['co']) * self.scale )
-                        no = compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']))
-                        shape_key.data[vert_index].co = shape_key.data[vert_index].co + co
-                        for loop_index in vert_loops[vert_index]:
-                            normals_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
-                                no[0] * 0.5 + 0.5,
-                                no[1] * 0.5 + 0.5,
-                                no[2] * 0.5 + 0.5,
-                                1,
-                            )
-                            if vert['color']:
-                                unknown_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
-                                    vert['color'][0] * 0.5 * vert['color'][3] + 0.5,
-                                    vert['color'][1] * 0.5 * vert['color'][3] + 0.5,
-                                    vert['color'][2] * 0.5 * vert['color'][3] + 0.5,
-                                    1,
-                                )
-
-                    morph_count += 1
+            self.create_shapekeys(context, ob, misc_data)
             context.window_manager.progress_update(6)
 
             # マテリアル追加
@@ -983,6 +854,193 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         if is_local_bones_corrupt:
             self.report(type={'ERROR'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
         return {'FINISHED'}
+
+    def create_mesh(self, context, model_name1, vertex_data, face_data) -> (bpy.types.Object, bpy.types.Mesh):
+        # メッシュ作成
+        me = context.blend_data.meshes.new(model_name1)
+        verts, faces = [], []
+        for data in vertex_data:
+            #co = list(data['co'][:])
+            #co[0] = -co[0]
+            #co[0] *= self.scale
+            #co[1] *= self.scale
+            #co[2] *= self.scale
+            co = compat.convert_cm_to_bl_space( mathutils.Vector(data['co']) * self.scale )
+            #co = mathutils.Vector(data['co']) * self.scale
+            verts.append(co)
+        context.window_manager.progress_update(2.25)
+        for data in face_data:
+            faces.extend(data)
+        context.window_manager.progress_update(2.5)
+        me.from_pydata(verts, [], faces)
+
+        # オブジェクト化
+        ob = context.blend_data.objects.new(model_name1, me)
+        ob.rotation_mode = 'QUATERNION'
+        compat.link(context.scene, ob)
+        compat.set_select(ob, True)
+        compat.set_active(context, ob)
+        bpy.ops.object.shade_smooth()
+        context.window_manager.progress_update(2.75)
+
+        # Custom Split Normals
+        #normals_color = me.vertex_colors.new(name=f"Basis_normals", do_init=False) or me.vertex_colors[-1]
+        #for vert_index, vert in enumerate(vertex_data):
+        #    no = compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) ) #mathutils.Vector(vert['normal']) * mathutils.Vector((-1,1,1)) #
+        #    no.normalize()
+        #    print(no)
+        #    for loop_index in vert_loops[vert_index]:
+        #        #normals[loop_index] = no
+        #        normals_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
+        #            *no, #*(no * 0.5 + mathutils.Vector([0.5]*3)),
+        #            1,
+        #        )
+        #me.normals_split_custom_set(normals)
+        me.normals_split_custom_set_from_vertices(
+            tuple(
+                compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']) )
+                for vert in vertex_data
+            )
+        )
+        me.use_auto_smooth = True
+
+        return ob, me
+
+    def create_vertex_groups(self, context, ob, vertex_data, local_bone_data):
+        # 頂点グループ作成
+        for data in local_bone_data:
+            ob.vertex_groups.new(name=common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
+        context.window_manager.progress_update(4.333)
+
+        for vert_index, data in enumerate(vertex_data):
+            for weight in data['weights']:
+                if 0.0 < weight['value']:
+                    vertex_group = ob.vertex_groups[common.decode_bone_name(weight['name'], self.is_convert_bone_weight_names)]
+                    vertex_group.add([vert_index], weight['value'], 'REPLACE')
+        context.window_manager.progress_update(4.666)
+
+        if self.is_vertex_group_sort:
+            bpy.ops.object.vertex_group_sort(sort_type='NAME')
+
+        if self.is_remove_empty_vertex_group:
+            for vg in ob.vertex_groups[:]:
+                for vert in ob.data.vertices:
+                    for group in vert.groups:
+                        if group.group == vg.index:
+                            if 0.0 < group.weight:
+                                break
+                    else: # if for-loop didn't break
+                        continue
+                    break
+                else: # if for-loop didn't break
+                    ob.vertex_groups.remove(vg)
+        
+        ob.vertex_groups.active_index = 0
+    
+    def create_uvs(self, context, me, vertex_data, extra_uv_uses):
+        # UV作成
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bm.loops.layers.uv.new(f_data_("MainUV"))
+        for i, used in enumerate(extra_uv_uses):    
+            if used:
+                bm.loops.layers.uv.new(f_data_("ExtraUV{num}", num=i))
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[bm.loops.layers.uv[0]].uv = vertex_data[loop.vert.index]['uv']
+                for extra_uv_index, extra_uv in enumerate(vertex_data[loop.vert.index]['extra_uvs']):
+                    loop[bm.loops.layers.uv[extra_uv_index+1]].uv = extra_uv
+        bm.to_mesh(me)
+        bm.free()
+
+    def create_shapekeys(self, context, ob, misc_data):
+        # モーフ追加
+        me = ob.data
+
+        is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
+        is_fast_create = (not compat.IS_LEGACY and bpy.app.version >= (3,2)) 
+
+        #if not is_fast_create:
+        #    bpy.ops.object.mode_set(mode='VERTEX_PAINT')
+        #    prev_brush_color = context.tool_settings.vertex_paint.brush.color
+        
+        vert_loops = dict()
+        for loop_index, loop in enumerate(me.loops):
+            vert_loops.setdefault(loop.vertex_index, list()).append(loop_index)
+        
+        def fill_color_layer(layer, color):
+            import numpy as np
+            color_np = np.array(color, dtype=float)
+            color_values = np.broadcast_to(color_np, (len(me.loops), len(color_np)))
+            layer.data.foreach_set('color', color_values.ravel())
+
+        def create_normals_color(name):
+            default_color = (0.5, 0.5, 0.5, 1.0)
+
+            #if is_fast_create:
+            #    bpy.ops.geometry.color_attribute_add(name=name, domain='CORNER', data_type='FLOAT_COLOR', color=default_color)
+            #    return me.attributes.active
+            
+            if is_use_attributes:
+                normals_color = me.attributes.new(name, 'FLOAT_COLOR', 'CORNER')
+            else:
+                normals_color = me.vertex_colors.new(name=name, do_init=False) or me.vertex_colors[-1]
+
+            fill_color_layer(normals_color, default_color)
+            
+            return normals_color
+        
+        def create_unknown_color(data):
+            unknown_color = None
+            if len(data['data']) and data['data'][0]['color']:
+                if is_use_attributes:
+                    unknown_color = me.attributes.new(f"{data['name']}_unknown", 'FLOAT_COLOR', 'CORNER')
+                else:
+                    unknown_color = me.vertex_colors.new(name=f"{data['name']}_unknown", do_init=False) or me.vertex_colors[-1]
+            return unknown_color
+
+        def set_shape_key_data(shape_key, normals_color, unknown_color):
+            for vert in data['data']:
+                vert_index = vert['index']
+                co = compat.convert_cm_to_bl_space( mathutils.Vector(vert['co']) * self.scale )
+                no = compat.convert_cm_to_bl_space( mathutils.Vector(vert['normal']))
+                shape_key.data[vert_index].co = shape_key.data[vert_index].co + co
+
+                write_vertex_colors(vert, no, normals_color, unknown_color)
+
+        def write_vertex_colors(vert, no, normals_color, unknown_color):
+            for loop_index in vert_loops[vert['index']]:
+                normals_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
+                    no[0] * 0.5 + 0.5,
+                    no[1] * 0.5 + 0.5,
+                    no[2] * 0.5 + 0.5,
+                    1,
+                )
+                if not vert['color']:
+                    continue
+                unknown_color.data[loop_index].color = ( # convert from range(-1, 1) to range(0, 1)
+                    vert['color'][0] * 0.5 * vert['color'][3] + 0.5,
+                    vert['color'][1] * 0.5 * vert['color'][3] + 0.5,
+                    vert['color'][2] * 0.5 * vert['color'][3] + 0.5,
+                    1,
+                )
+
+        morph_count = -1
+        for data in misc_data:
+            if not data['type'] == 'morph':
+                continue
+            
+            morph_count += 1
+
+            if morph_count == 0:
+                bpy.ops.object.shape_key_add(from_mix=False)
+                me.shape_keys.name = ob.name
+            shape_key = ob.shape_key_add(name=data['name'], from_mix=False)
+            
+            normals_color = create_normals_color(f"{data['name']}_delta_normals")
+            unknown_color = create_unknown_color(data)
+            set_shape_key_data(shape_key, normals_color, unknown_color)
+
 
     def create_mateprop_old(self, context, me, tex_set, mate, mate_idx, data: list):
         # create_matepropとの違いは、slot_indexの有無、nodeの接続・配置処理のみ
