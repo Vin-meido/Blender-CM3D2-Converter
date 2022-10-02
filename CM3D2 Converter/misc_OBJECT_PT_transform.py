@@ -2,6 +2,7 @@
 import bpy
 import bmesh
 import mathutils
+import numpy as np
 from . import common
 from . import compat
 from .translations.pgettext_functions import *
@@ -160,7 +161,27 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
         _prop_enum_row(col, self, 'bone_info_mode', 'ARMATURE_PROPERTY', enabled=bool(arm_ob and "BoneData:0" in arm_ob.data))
 
     @staticmethod
-    def from_bone_data(ob: bpy.types.Object, bone_data, base_bone_name, scale=5):
+    def from_bone_data(ob: bpy.types.Object, bone_data, local_bone_data, base_bone_name, scale=5):
+        
+        base_bone_offset = mathutils.Matrix.Identity(4)
+        for bone in local_bone_data:
+            if bone['name'] == base_bone_name:
+                # When the base bone is in the bind pose data, 
+                # then the entire mesh needs to be offset from the base bone
+                print("Found base bone in local bone data!")
+                print(bone['matrix'])
+                mat = mathutils.Matrix(np.array(bone['matrix']).reshape((4,4)))
+                mat.transpose()
+                mat.translation *= -scale
+                mat.translation = compat.mul(mat.to_3x3().inverted(), mat.translation)
+                pos = mat.translation.copy()
+                
+                mat.transpose()
+                mat.translation = pos
+                #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+
+                base_bone_offset = mat
+
         for bone in bone_data:
             if bone['name'] == base_bone_name:
                 #co = bone['co'].copy()
@@ -194,6 +215,8 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
                 mat = mathutils.Matrix()
                 for local_mat in parent_mats:
                     mat = compat.mul(mat, local_mat)
+
+                mat = compat.mul(mat, base_bone_offset.inverted())
 
                 mat = compat.convert_cm_to_bl_space(mat)
                 mat = compat.convert_cm_to_bl_local_space(mat)
@@ -244,16 +267,18 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
                 return bone_data_report_cancel()
             base_bone_name = bone_data_text['BaseBone']
             bone_data = CNV_OT_export_cm3d2_model.bone_data_parser(l.body for l in bone_data_text.lines)
+            local_bone_data = CNV_OT_export_cm3d2_model.local_bone_data_parser(l.body for l in bone_data_text.lines)
         elif self.bone_info_mode in ['OBJECT_PROPERTY', 'ARMATURE_PROPERTY']:
             target = ob if self.bone_info_mode == 'OBJECT_PROPERTY' else arm_ob.data
             if not 'BaseBone' in target:
                 return bone_data_report_cancel()
             base_bone_name = target['BaseBone']
             bone_data = CNV_OT_export_cm3d2_model.bone_data_parser(CNV_OT_export_cm3d2_model.indexed_data_generator(target, prefix="BoneData:"))
+            local_bone_data = CNV_OT_export_cm3d2_model.local_bone_data_parser(CNV_OT_export_cm3d2_model.indexed_data_generator(target, prefix="LocalBoneData:"))
         
         old_basis = ob.matrix_basis.copy()
         if bone_data:
-            self.from_bone_data(ob, bone_data, base_bone_name, self.scale)
+            self.from_bone_data(ob, bone_data, local_bone_data, base_bone_name, self.scale)
         else:
             self.from_armature(ob, arm_ob.data, base_bone_name)
 

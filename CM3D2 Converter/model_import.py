@@ -65,6 +65,8 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             self.filepath = common.default_cm3d2_dir(prefs.model_import_path, None, "model")
         self.scale = prefs.scale
         self.is_convert_bone_weight_names = prefs.is_convert_bone_weight_names
+        if compat.IS_LEGACY or bpy.app.version < (2, 91):
+            self.is_sharp = False
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -80,7 +82,8 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         sub_box.label(text="メッシュ")
         sub_box.prop(self, 'is_remove_doubles', icon='STICKY_UVS_VERT')
         sub_box.prop(self, 'is_seam' , icon=compat.icon('UV_EDGESEL'))
-        sub_box.prop(self, 'is_sharp', icon=compat.icon('EDGESEL'))
+        if not compat.IS_LEGACY and bpy.app.version >= (2, 91):
+            sub_box.prop(self, 'is_sharp', icon=compat.icon('EDGESEL'))
 
         sub_box = box.box()
         sub_box.enabled = self.is_mesh
@@ -535,33 +538,49 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             # Configure bones in local bone data
             is_local_bones_corrupt = False
             base_bone = arm.edit_bones.get(common.decode_bone_name(model_name2, self.is_convert_bone_weight_names))
+            base_bone_offset = base_bone.head.copy()
+
+            def setup_local_bone(bone, mat, isRoot=False):
+                mat.transpose()
+                mat.translation *= -self.scale
+                mat.translation = compat.mul(mat.to_3x3().inverted(), mat.translation)
+                pos = mat.translation.copy()
+                
+                mat.transpose()
+                if (isRoot):
+                    mat.translation = pos
+                else:
+                    mat.translation = pos + base_bone_offset
+                #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+                mat = compat.convert_cm_to_bl_bone_rotation(mat)
+                mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
+            
+                # The matrices from the local bone data are more precise rotations, but make sure they aren't corrupted
+                old_pos, old_rot, old_scale = bone.matrix.decompose()
+                compat.set_bone_matrix(bone, mat)
+                new_pos, new_rot, new_scale = bone.matrix.decompose()
+                dif_pos = (new_pos-old_pos).length/self.scale
+                dif_rot = old_rot.rotation_difference(new_rot)
+                if dif_pos > 0.1 or dif_rot.w < .9:
+                    print(dif_pos,  dif_rot)
+                    is_local_bones_corrupt = True
+                    #self.report(type={'WARNING'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
+                return pos
+
+            for data in local_bone_data:
+                if self.is_use_local_bones and data['name'] == model_name2:
+                    bone = arm.edit_bones.get(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
+                    mat = mathutils.Matrix(data['matrix'])
+                    print("Found base bone in local bone data!")
+                    base_bone_offset = base_bone.head - setup_local_bone(bone, mat, isRoot=True)
+
+
             for data in local_bone_data:
                 bone = arm.edit_bones.get(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
                 bone.use_deform = True
-                if self.is_use_local_bones:
+                if self.is_use_local_bones and not data['name'] == model_name2:
                     mat = mathutils.Matrix(data['matrix'])
-                    
-                    mat.transpose()
-                    mat.translation *= -self.scale
-                    mat.translation = compat.mul(mat.to_3x3().inverted(), mat.translation)
-                    pos = mat.translation.copy()
-                    
-                    mat.transpose()
-                    mat.translation = pos + base_bone.head
-                    #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
-                    mat = compat.convert_cm_to_bl_bone_rotation(mat)
-                    mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
-                
-                    # The matrices from the local bone data are more precise rotations, but make sure they aren't corrupted
-                    old_pos, old_rot, old_scale = bone.matrix.decompose()
-                    compat.set_bone_matrix(bone, mat)
-                    new_pos, new_rot, new_scale = bone.matrix.decompose()
-                    dif_pos = (new_pos-old_pos).length/self.scale
-                    dif_rot = old_rot.rotation_difference(new_rot)
-                    if dif_pos > 0.1 or dif_rot.w < .9:
-                        print(dif_pos,  dif_rot)
-                        is_local_bones_corrupt = True
-                        #self.report(type={'WARNING'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
+                    setup_local_bone(bone, mat)
             
             
             def distOnRay(pos0, pos1, point):
@@ -620,7 +639,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         if self.is_mesh:
             ob, me = self.create_mesh(context, model_name1, vertex_data, face_data)
             # オブジェクト変形
-            CNV_OT_align_to_cm3d2_base_bone.from_bone_data(ob=ob, bone_data=bone_data, base_bone_name=model_name2, scale=self.scale)
+            CNV_OT_align_to_cm3d2_base_bone.from_bone_data(ob, bone_data, local_bone_data, base_bone_name=model_name2, scale=self.scale)
             context.window_manager.progress_update(3)
             
             self.create_uvs(context, me, vertex_data, extra_uv_uses)
@@ -678,22 +697,25 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             # メッシュ整頓
             pre_mesh_select_mode = context.tool_settings.mesh_select_mode[:]
             
-            if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
-                context.tool_settings.mesh_select_mode = (False, True, False)
-                bpy.ops.object.mode_set(mode='EDIT')
-                
-                bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
-                for is_comparison, vert in zip(comparison_data, me.vertices):
-                    if is_comparison:
-                        vert.select = False
-                bpy.ops.mesh.mark_sharp(use_verts=False)
-            
-                bpy.ops.object.mode_set(mode='OBJECT')
+            # Too buggy on versions before 2.91 so just disable it outright
+            #if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
+            #    context.tool_settings.mesh_select_mode = (False, True, False)
+            #    bpy.ops.object.mode_set(mode='EDIT')
+            #    
+            #    bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True, use_multi_face=False, use_non_contiguous=False, use_verts=False)
+            #    for is_comparison, vert in zip(comparison_data, me.vertices):
+            #        if is_comparison:
+            #            vert.select = False
+            #    bpy.ops.mesh.mark_sharp(use_verts=False)
+            #
+            #    bpy.ops.object.mode_set(mode='OBJECT')
+
+            can_mark_sharp = not compat.IS_LEGACY and bpy.app.version >= (2, 91)
 
             if self.is_remove_doubles:
                 context.tool_settings.mesh_select_mode = (True, False, False)
                 bpy.ops.object.mode_set(mode='EDIT')
-                if not self.is_sharp:
+                if not self.is_sharp or not can_mark_sharp:
                     bpy.ops.mesh.select_all(action='DESELECT')
                     bpy.ops.object.mode_set(mode='OBJECT')
                     for is_comparison, vert in zip(comparison_data, me.vertices):
@@ -703,10 +725,10 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 else:
                     bpy.ops.mesh.select_all(action='SELECT')
                 
-                if self.is_sharp and (compat.IS_LEGACY or bpy.app.version < (2, 91)):
-                    bpy.ops.mesh.remove_doubles(threshold=0.000001 * self.scale)
+                if not can_mark_sharp:
+                    bpy.ops.mesh.remove_doubles(threshold=0.000001/5 * self.scale)
                 else:
-                    bpy.ops.mesh.remove_doubles(threshold=0.000001 * self.scale, use_sharp_edge_from_normals=self.is_sharp)
+                    bpy.ops.mesh.remove_doubles(threshold=0.000001/5 * self.scale, use_sharp_edge_from_normals=self.is_sharp)
                 bpy.ops.object.mode_set(mode='OBJECT')
             
             context.tool_settings.mesh_select_mode = pre_mesh_select_mode
