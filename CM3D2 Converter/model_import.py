@@ -538,22 +538,25 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             # Configure bones in local bone data
             is_local_bones_corrupt = False
             base_bone = arm.edit_bones.get(common.decode_bone_name(model_name2, self.is_convert_bone_weight_names))
-            base_bone_offset = base_bone.head.copy()
+            base_bone_offset = base_bone.matrix.copy()
+            base_bone_offset = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), base_bone_offset)
+            base_bone_offset = compat.convert_bl_to_cm_bone_rotation(base_bone_offset)
+            print(base_bone_offset)
+            print(f"base_bone_offset @ I =\n{base_bone_offset @ mathutils.Matrix.Identity(4)}")
+            #base_bone_offset = mathutils.Matrix.Identity(4) # compat.mul(base_bone_mat.inverted(), base_bone_mat)
 
             def setup_local_bone(bone, mat, isRoot=False):
-                mat.transpose()
-                mat.translation *= -self.scale
-                mat.translation = compat.mul(mat.to_3x3().inverted(), mat.translation)
-                pos = mat.translation.copy()
-                
-                mat.transpose()
-                if (isRoot):
-                    mat.translation = pos
-                else:
-                    mat.translation = pos + base_bone_offset
-                #mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+                pos = compat.transform_inverse(mat.transposed()).translation
+                mat.row[3] = (0.0, 0.0, 0.0, 1.0)
+                mat.translation = pos
+                mat.translation *= self.scale
+                offset_mat = mat.copy()
+                if not common.is_descendant_of(bone, base_bone):
+                    mat = compat.mul(base_bone_offset, mat)
+                    #mat.translation = mat.translation + base_bone_offset.translation
                 mat = compat.convert_cm_to_bl_bone_rotation(mat)
                 mat = compat.mul(mathutils.Matrix.Scale(-1, 4, (1, 0, 0)), mat)
+                
             
                 # The matrices from the local bone data are more precise rotations, but make sure they aren't corrupted
                 old_pos, old_rot, old_scale = bone.matrix.decompose()
@@ -565,14 +568,14 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     print(dif_pos,  dif_rot)
                     is_local_bones_corrupt = True
                     #self.report(type={'WARNING'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
-                return pos
+                return mat
 
             for data in local_bone_data:
                 if self.is_use_local_bones and data['name'] == model_name2:
                     bone = arm.edit_bones.get(common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
                     mat = mathutils.Matrix(data['matrix'])
                     print("Found base bone in local bone data!")
-                    base_bone_offset = base_bone.head - setup_local_bone(bone, mat, isRoot=True)
+                    #base_bone_offset = compat.mul(compat.transform_inverse(base_bone_offset), setup_local_bone(bone, mat, isRoot=True))
 
 
             for data in local_bone_data:

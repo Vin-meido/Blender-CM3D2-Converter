@@ -250,6 +250,15 @@ def mul4(w, x, y, z):
 
     return w @ x @ y @ z
 
+def transform_inverse(m: mathutils.Matrix) -> mathutils.Matrix:
+    """Returns the inverse of a 4x4 transformation matrix
+    with the translation handled properly"""
+    inv_m = m.copy()
+    inv_m.translation = mathutils.Vector((0,0,0))
+    inv_m.invert()
+    inv_m.translation = mul(inv_m.to_3x3(), -m.translation)
+    return inv_m
+
 
 CM_TO_BL_SPACE_MAT4 = mul(
     bpy_extras.io_utils.axis_conversion(from_forward='Z', from_up='Y', to_forward='-Y', to_up='Z').to_4x4(),
