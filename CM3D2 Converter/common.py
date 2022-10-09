@@ -1363,3 +1363,13 @@ def get_target_and_source_ob(context, copyTarget=False, copySource=False):
         return  target_ob, source_ob, source_original_ob
     else:
         return  target_ob, source_ob
+
+
+# luvoid
+def is_descendant_of(bone, ancestor) -> bool:
+    """Returns true if a bone is the descendant of the given ancestor"""
+    while bone.parent:
+        bone = bone.parent
+        if bone.name == ancestor.name:
+            return True
+    return False
