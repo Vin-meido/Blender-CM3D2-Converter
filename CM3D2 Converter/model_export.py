@@ -1011,7 +1011,10 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         bone_data = []
         for bone in bones:
 
-            is_scl_bone = bone['cm3d2_scl_bone'] if 'cm3d2_scl_bone' in bone else 0
+            # Also check for UnknownFlag for backwards compatibility
+            is_scl_bone = bone['cm3d2_scl_bone'] if 'cm3d2_scl_bone' in bone \
+                     else bone['UnknownFlag']    if 'UnknownFlag'    in bone \
+                     else 0 
             parent_index = bone_name_indices[bone.parent.name] if bone.parent else -1
 
             mat = bone.matrix.copy()
