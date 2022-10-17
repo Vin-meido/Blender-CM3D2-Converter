@@ -1073,8 +1073,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 data['scale'] = scale
             bone_data.append(data)
         
-        compat.set_active(context, pre_active)
         bpy.ops.object.mode_set(mode=pre_mode)
+        compat.set_active(context, pre_active)
         return bone_data
 
     @staticmethod
