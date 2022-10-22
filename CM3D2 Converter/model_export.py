@@ -145,11 +145,11 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 self.bone_info_mode = 'ARMATURE_PROPERTY'
 
         # エクスポート時のデフォルトパスを取得
-        if not self.filepath[-6:] == '.model':
-            if common.preferences().model_default_path:
-                self.filepath = common.default_cm3d2_dir(common.preferences().model_default_path, self.model_name, "model")
-            else:
-                self.filepath = common.default_cm3d2_dir(common.preferences().model_export_path, self.model_name, "model")
+        #if not self.filepath[-6:] == '.model':
+        if common.preferences().model_default_path:
+            self.filepath = common.default_cm3d2_dir(common.preferences().model_default_path, self.model_name, "model")
+        else:
+            self.filepath = common.default_cm3d2_dir(common.preferences().model_export_path, self.model_name, "model")
 
         # バックアップ関係
         self.is_backup = bool(common.preferences().backup_ext)
