@@ -121,6 +121,14 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         self.base_bone_name = ob_names[1] if 2 <= len(ob_names) else 'Auto'
 
         # ボーン情報元のデフォルトオプションを取得
+        arm_ob = ob.parent
+        for mod in ob.modifiers:
+            if mod.type == 'ARMATURE' and mod.object:
+                arm_ob = mod.object
+        if arm_ob and not arm_ob.type == 'ARMATURE':
+            arm_ob = None
+
+        info_mode_was_armature = (self.bone_info_mode == 'ARMATURE')
         if "BoneData" in context.blend_data.texts:
             if "LocalBoneData" in context.blend_data.texts:
                 self.bone_info_mode = 'TEXT'
@@ -130,18 +138,14 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 self.version = str(ver)
             if "LocalBoneData:0" in ob:
                 self.bone_info_mode = 'OBJECT_PROPERTY'
-        arm_ob = ob.parent
         if arm_ob:
-            if arm_ob.type == 'ARMATURE':
+            if info_mode_was_armature:
+                self.bone_info_mode = 'ARMATURE'
+            else:
                 self.bone_info_mode = 'ARMATURE_PROPERTY'
-        else:
-            for mod in ob.modifiers:
-                if mod.type == 'ARMATURE':
-                    if mod.object:
-                        self.bone_info_mode = 'ARMATURE_PROPERTY'
-                        break
 
         # エクスポート時のデフォルトパスを取得
+        #if not self.filepath[-6:] == '.model':
         if common.preferences().model_default_path:
             self.filepath = common.default_cm3d2_dir(common.preferences().model_default_path, self.model_name, "model")
         else:
@@ -1011,7 +1015,10 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         bone_data = []
         for bone in bones:
 
-            is_scl_bone = bone['cm3d2_scl_bone'] if 'cm3d2_scl_bone' in bone else 0
+            # Also check for UnknownFlag for backwards compatibility
+            is_scl_bone = bone['cm3d2_scl_bone'] if 'cm3d2_scl_bone' in bone \
+                     else bone['UnknownFlag']    if 'UnknownFlag'    in bone \
+                     else 0 
             parent_index = bone_name_indices[bone.parent.name] if bone.parent else -1
 
             mat = bone.matrix.copy()
@@ -1070,8 +1077,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                 data['scale'] = scale
             bone_data.append(data)
         
-        compat.set_active(context, pre_active)
         bpy.ops.object.mode_set(mode=pre_mode)
+        compat.set_active(context, pre_active)
         return bone_data
 
     @staticmethod
