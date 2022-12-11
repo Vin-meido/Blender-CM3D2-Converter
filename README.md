@@ -1,3 +1,6 @@
+# Source Documentation
+https://luvoid.github.io/Blender-CM3D2-Converter/CM3D2-Converter.html
+
 # Blender-CM3D2-Converter
 　3Dアダルトゲーム「[カスタムメイド3D2](http://kisskiss.tv/cm3d2/)」「[カスタムオーダーメイド3D2](http://com3d2.jp/)」で使用されるモデルファイル形式(.model)を  
 　フリー3D統合環境である「[Blender](https://www.blender.org/)」で扱うためのアドオンです。  

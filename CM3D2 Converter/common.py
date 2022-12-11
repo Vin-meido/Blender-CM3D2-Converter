@@ -3,7 +3,6 @@ import re
 import math
 import struct
 import shutil
-import winreg
 import bpy
 import bmesh
 import mathutils
@@ -436,6 +435,7 @@ def get_image_average_color_uv(img, me=None, mate_index=-1, sample_count=10):
 
 def get_cm3d2_dir():
     try:
+        import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\KISS\カスタムメイド3D2') as key:
             return winreg.QueryValueEx(key, 'InstallPath')[0]
     except:
