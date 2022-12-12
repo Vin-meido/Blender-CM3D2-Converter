@@ -1,0 +1,6 @@
+# These are the python requirements for building the documentation
+# Installing these are not required for using the add-on
+
+#python==3.10.*
+pdoc
+bpy==3.4

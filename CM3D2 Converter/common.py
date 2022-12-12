@@ -1049,7 +1049,7 @@ class NodeHandler():
 
         return None
 
-@compat.BlRegister()
+#@compat.BlRegister()
 class CNV_UL_generic_selector(bpy.types.UIList):
     bl_label       = "CNV_UL_generic_selector"
     bl_options     = {'DEFAULT_CLOSED'}
