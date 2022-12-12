@@ -124,12 +124,12 @@ def pdoc_blender_add_on(module: ModuleType, out_dir: Path | str):
     source_doc = doc.Module(module)
     #all_modules[module.__name__] = source_doc
     
+    api_docs = pdoc_bpy(module)
+    all_modules.update(api_docs.items())  
+
     for module_name in extract.walk_specs([str(module_dir)]):
         print(module_name)
-        all_modules[module_name] = doc.Module.from_name(module_name)
-
-    api_docs = pdoc_bpy(module)
-    all_modules.update(api_docs.items())    
+        all_modules[module_name] = doc.Module.from_name(module_name)  
 
     out_dir = Path(out_dir)
     for pdoc_module in all_modules.values():
@@ -141,7 +141,12 @@ def pdoc_blender_add_on(module: ModuleType, out_dir: Path | str):
             outfile.parent.mkdir(parents=True, exist_ok=True)
             outfile.write_bytes(out.encode())
     
-    index = render.html_index(all_modules)
+    index_modules = {}
+    index_modules_shown = ['bpy.ops', 'bpy.types', module.__name__]
+    for module_shown in index_modules_shown:
+        index_modules[module_shown] = all_modules[module_shown]
+
+    index = render.html_index(index_modules_shown)
     if index:
         (out_dir / "index.html").write_bytes(index.encode())
 
