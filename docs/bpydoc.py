@@ -123,7 +123,7 @@ class RnaStruct(RnaNamespace, Class):
     
     @cached_property
     def docstring(self) -> str:
-        return f'<b>{self.rna_name}</b><br/>{self.rna_struct.description}'
+        return f'<h5>{self.rna_name}</h5>{self.rna_struct.description}'
 
     @cached_property
     def rna_name(self) -> str:
@@ -156,10 +156,6 @@ class BpyModule(RnaInfo, Module):
         module: types.ModuleType,
         rna_member_info: Iterable[(InfoMemberRNA, Doc)]
     ):
-        """
-        Creates a documentation object given the actual
-        Python module object.
-        """
         Module.__init__(self, module)
         RnaInfo.__init__(self, module.__name__, '', module, rna_member_info)
         self.bpy_module = module
@@ -236,8 +232,29 @@ class BpyFunction(RnaStruct, Function):
     ):
         RnaStruct.__init__(self, modulename, qualname, func.get_rna_type(), taken_from)
         Function.__init__(self, modulename, qualname, func, taken_from)
-        _ = self.signature # For some reason caching this immediately fixes an error
 
+    
+    @cached_property
+    def docstring(self) -> str:
+        docstring = RnaStruct.docstring.func(self)
+        props = self.rna_struct.properties
+        args = []
+        for prop in props:
+            if (prop.is_hidden):
+                continue
+            default = _safe_getattr(prop, 'default', empty)
+            docstring += '<br/>'
+            docstring += '<div class="classattr">'
+            docstring += '<div class="attr variable">'
+            docstring += f'<b>{prop.name}</b> (<span class="name">{prop.identifier}</span>: <span class="annotation">{prop.type}</span>'
+            if not default is empty:
+                docstring += f'<span class="default">= {default}</span>'
+            docstring += ')</div>'
+            if prop.description:
+                docstring += f"{prop.description}"
+            docstring += '</div>'
+
+        return docstring
 
     @cached_property
     def is_classmethod(self) -> bool:
@@ -248,26 +265,13 @@ class BpyFunction(RnaStruct, Function):
         return True
 
     @cached_property
-    def funcdef(self) -> str:
-        return "def"
-
-    @cached_property
     def signature(self) -> inspect.Signature:
-        """
-        The function's signature.
-
-        This usually returns an instance of `_PrettySignature`, a subclass of `inspect.Signature`
-        that contains pdoc-specific optimizations. For example, long argument lists are split over multiple lines
-        in repr(). Additionally, all types are already resolved.
-
-        If the signature cannot be determined, a placeholder Signature object is returned.
-        """
         props = self.rna_struct.properties
         args = []
         for prop in props:
             if (prop.is_hidden):
                 continue
-            default = _safe_getattr(prop, 'default', empty)
+            default = empty #_safe_getattr(prop, 'default', empty)
             args.append(Parameter(prop.identifier, Parameter.KEYWORD_ONLY, default=default))
         sig = _PrettySignature(args)
         return sig
