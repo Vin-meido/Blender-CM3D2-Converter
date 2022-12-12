@@ -14,12 +14,13 @@ from pdoc._compat import cache, cached_property
 from pdoc import doc_ast, extract
 from pdoc.doc_types import empty, resolve_annotations
 from pdoc.doc import *
-from pdoc.doc import _include_fullname_in_traceback, _docstr, _safe_getattr, _children, _PrettySignature
+from pdoc.doc import _include_fullname_in_traceback, _children, _docstr, _decorators, _safe_getattr, _PrettySignature
 
 import bpy
-from rna_info import InfoStructRNA, InfoFunctionRNA, InfoOperatorRNA, InfoPropertyRNA# blender module; must be imported after bpy
+from rna_info import InfoStructRNA, InfoFunctionRNA, InfoOperatorRNA, InfoPropertyRNA # blender module; must be imported after bpy
 
 InfoMemberRNA: TypeAlias = InfoFunctionRNA | InfoOperatorRNA | InfoPropertyRNA
+InfoNamespaceRNA: TypeAlias = InfoStructRNA | InfoOperatorRNA
 InfoCallableRNA = (InfoFunctionRNA, InfoOperatorRNA)
 
 
@@ -95,11 +96,9 @@ class RnaInfo(RnaNamespace):
         self,
         modulename,
         qualname,
-        bpy_obj,
         rna_member_info: Iterable[InfoMemberRNA] = []
     ):
         RnaNamespace.__init__(self, modulename, qualname)
-        self.bpy_obj = bpy_obj
         self.rna_member_info: Set[InfoMemberRNA] = set(rna_member_info)
 
     @cached_property
@@ -157,7 +156,7 @@ class BpyModule(RnaInfo, Module):
         rna_member_info: Iterable[(InfoMemberRNA, Doc)]
     ):
         Module.__init__(self, module)
-        RnaInfo.__init__(self, module.__name__, '', module, rna_member_info)
+        RnaInfo.__init__(self, module.__name__, '', rna_member_info)
         self.bpy_module = module
 
     @cached_property
@@ -183,11 +182,13 @@ class BpyModule(RnaInfo, Module):
 
 class BpyClass(RnaStruct):
     def __init__(
-        self, modulename: str, qualname: str, cls: T, taken_from: tuple[str, str], 
-        rna_member_info: Iterable[InfoMemberRNA] = []
+        self, modulename: str, qualname: str, cls: type, taken_from: tuple[str, str], 
+        rna_member_info: Iterable[InfoMemberRNA] = [],
+        auto_get_members: bool = True
     ):
         RnaStruct.__init__(self, modulename, qualname, cls.bl_rna, taken_from)
         Class.__init__(self, modulename, qualname, cls, taken_from)
+        self.auto_get_members = auto_get_members
     
     
     @cached_property
@@ -219,6 +220,61 @@ class BpyClass(RnaStruct):
         return []
         bases = [self.rna_struct.base]
         return bases
+
+
+class BpyParent(RnaInfo, Class):
+    """
+    This class is used exclusivly for showing properties and functions
+    that were added to already existing classes
+    """
+    def __init__(
+        self, bpy_module: ModuleType, rna_struct: InfoNamespaceRNA, taken_from: tuple[str, str] = None, 
+        rna_member_info: Iterable[InfoMemberRNA] = [],
+        ignore_rna_info_keys: Tuple[Iterable[InfoStructRNA], Iterable[InfoFunctionRNA], Iterable[InfoOperatorRNA], Iterable[InfoPropertyRNA]] = ([],[],[],[])
+    ):
+        self.rna_struct = rna_struct
+        self.ignore_rna_info_keys = ignore_rna_info_keys
+        modulename = bpy_module.__name__
+        qualname = rna_struct.identifier
+        obj = _safe_getattr(modulename, qualname, bpy.types.bpy_struct)
+        if taken_from is None:
+            taken_from = (modulename, '')
+        Class.__init__(self, modulename, qualname, obj, taken_from)
+        RnaInfo.__init__(self, modulename, qualname, rna_member_info)
+
+    @cached_property
+    def members(self) -> dict[str, Doc]:
+        members: dict[str, Doc] = {}
+        for name, doc in self.bpy_members.items():
+            members[name] = doc
+
+        return members
+
+    @cached_property
+    def bases(self) -> list[tuple[str, str, str]]:
+        return []
+
+    @cached_property
+    def _rna_member_objects(self) -> dict[str, Any]:
+        members = {} #super()._rna_member_objects
+        
+        for key, info in InfoFunctionRNA.global_lookup.items():
+            if key in self.ignore_rna_info_keys[1]:
+                continue
+            if key[0] == self.rna_struct.identifier:
+                name, obj = self.object_from_rna_info(info)
+                members[name] = obj
+        
+        for key, info in InfoPropertyRNA.global_lookup.items():
+            if key in self.ignore_rna_info_keys[3]:
+                continue
+            if key[0] == self.rna_struct.identifier:
+                name, obj = self.object_from_rna_info(info)
+                members[name] = obj
+        
+        return members
+
+
 
 
 class BpyFunction(RnaStruct, Function):
@@ -292,10 +348,13 @@ class BpyProperty(Variable):
         qualname: str,
         prop: bpy.types.Property,
         taken_from: tuple[str, str],
+        is_classvar: bool = True
     ):
-        docstring = prop.description
+        if (prop.is_hidden):
+            docstring = prop.description
+        else:
+            docstring = f'<h5>{prop.name}</h5>{prop.description}'
         annotation = str(prop.type)
         default_value = _safe_getattr(prop, 'default', empty)
         super().__init__(modulename, qualname, 
             taken_from=taken_from, docstring=docstring, annotation=annotation, default_value=default_value)
-
