@@ -1,4 +1,4 @@
-name: source docs website
+name: Generate Docs for Hithub Pages
 
 # build the documentation whenever there are new commits on main
 on:
@@ -28,7 +28,7 @@ jobs:
       - run: pip install -r docs/requirements.txt
       # ADJUST THIS: build your documentation into docs/.
       # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
-      - run: python -m docs/make.py
+      - run: python docs/make.py
 
       - uses: actions/upload-pages-artifact@v1
         with:
