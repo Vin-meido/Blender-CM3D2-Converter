@@ -9,7 +9,9 @@ from bpydoc import *
 
 
 import bpy
-import rna_info # blender module; must be imported after bpy
+# blender modules; must be imported after bpy
+import bpy_types
+import rna_info
 
 
 
@@ -17,8 +19,10 @@ def pdoc_bpy(module: ModuleType, out_dir: str | Path = None) -> Dict[str, Module
     """
     Render the documentation for all exported bpy operators.
     """
+    module_dir = Path(f'{module.__file__}/../').resolve()
     if not out_dir is None:
         out_dir = Path(out_dir)
+    
 
     # To find the module's additions, get RNA info, call register, 
     # then get RNA info again, and find what was added
@@ -37,9 +41,37 @@ def pdoc_bpy(module: ModuleType, out_dir: str | Path = None) -> Dict[str, Module
 
     # Store where each struct is to easily resolve it later
     struct_modules = { }
-    bpy_modules: Dict[ModuleType, set] = { }
+    bpy_modules: Dict[ModuleType | str, set] = { }
     loaded_modules = { }
     bpy_ops_sub_modules = set()
+
+    def _get_rna_base(rna_obj: bpy_types.RNAMeta | bpy_types.StructRNA):
+        while (rna_obj.bl_rna.base is not None):
+            rna_obj = rna_obj.bl_rna.base
+        rna_base = getattr(bpy.types, rna_obj.identifier)
+        return rna_base
+
+    def _find_draw_funcs(rna_meta: bpy_types.RNAMeta):
+        if not hasattr(rna_meta, 'draw') or not hasattr(rna_meta.draw, '_draw_funcs'):
+            return
+        draw_func_docs = set()
+        for i, draw_func in enumerate(rna_meta.draw._draw_funcs):
+            file_path = Path(draw_func.__code__.co_filename)
+            if (file_path.is_relative_to(module_dir)):
+                func_doc = doc.Function(bpy.types.__name__, 
+                                        f'{rna_meta.bl_rna.identifier}.draw.draw_funcs[{i}]',
+                                        draw_func,
+                                        (draw_func.__module__, draw_func.__qualname__))
+                draw_func_docs.add(func_doc)
+        if len(draw_func_docs) > 0:
+            bpyparent = BpyParent(bpy_types, rna_meta.bl_rna, (rna_meta.__module__, rna_meta.__qualname__), draw_func_docs)
+            rna_base = _get_rna_base(rna_meta)
+            bpy_modules.setdefault(f'{rna_base.__module__}.{rna_base.__qualname__}', set()).add(bpyparent)
+            #print(bpyparent)
+    
+    for attr in dir(bpy.types):
+        _find_draw_funcs(getattr(bpy.types, attr))
+
 
     def _get_sub_module(module_name):
         return loaded_modules.setdefault(f'bpy.ops.{module_name}', getattr(bpy.ops, module_name))
@@ -79,6 +111,7 @@ def pdoc_bpy(module: ModuleType, out_dir: str | Path = None) -> Dict[str, Module
             bpyparent.rna_member_info.add(child_info)
             print(f"Got bpyparent {bpyparent}")
 
+
     for key, func_info in module_rna_info_list[1].items():
         _set_parent(key, func_info)
     for key, prop_info in module_rna_info_list[3].items():
@@ -86,16 +119,21 @@ def pdoc_bpy(module: ModuleType, out_dir: str | Path = None) -> Dict[str, Module
     for struct_info in module_rna_info_list[0].values():
         bpy_modules.setdefault(bpy.types, set()).add(struct_info)
         struct_modules[struct_info.identifier] = bpy.types
+        _find_draw_funcs(struct_info)
     for op_info in module_rna_info_list[2].values():
         sub_module = _get_sub_module(op_info.module_name)
         bpy_modules.setdefault(sub_module, set()).add(op_info)
         bpy_ops_sub_modules.add(sub_module)
         struct_modules[op_info.identifier] = sub_module
 
+
     all_modules = {}
     for bpy_module, rna_members in bpy_modules.items():
-        pdoc_module = BpyModule(bpy_module, rna_members)
-        all_modules[bpy_module.__name__] = pdoc_module
+        if isinstance(bpy_module, ModuleType):
+            pdoc_module = BpyModule(bpy_module, rna_members)
+        else:
+            pdoc_module = BpyNamespace(str(bpy_module), rna_members)
+        all_modules[pdoc_module.fullname] = pdoc_module
         #print(f'all_modules[{bpy_module.__name__}] = {pdoc_module}')
     
     # handle bpy.ops
@@ -121,8 +159,11 @@ def pdoc_blender_add_on(module: ModuleType, out_dir: Path | str):
     all_modules.update(api_docs.items())  
 
     module_dir = Path(f'{module.__file__}/../').resolve()
+    main_modules = {}
     for module_name in extract.walk_specs([str(module_dir)]):
-        all_modules[module_name] = doc.Module.from_name(module_name)  
+        main_modules[module_name] = doc.Module.from_name(module_name)  
+
+    all_modules.update(main_modules)
 
     out_dir = Path(out_dir)
     for pdoc_module in all_modules.values():
@@ -134,13 +175,31 @@ def pdoc_blender_add_on(module: ModuleType, out_dir: Path | str):
             outfile.parent.mkdir(parents=True, exist_ok=True)
             outfile.write_bytes(out.encode())
     
-    index_modules = {}
-    index_modules_shown = ['bpy.ops', 'bpy.types', module.__name__]
-    for module_shown in index_modules_shown:
-        index_modules[module_shown] = all_modules[module_shown]
+    print(all_modules.keys())
 
-    index = render.html_index(index_modules_shown)
+    index_names = {
+        'bpy_types.Header': 'Headers'      ,
+        'bpy_types.Panel' : 'Panels'       ,
+        'bpy_types.Menu'  : 'Menus'        ,
+        'bpy.ops'         : 'Operators'    ,
+        'bpy.types'       : 'Types'        ,
+        module.__name__   : module.__name__,
+    }
+    index_modules = { k: all_modules[k] for k in index_names }
+
+    for submodule in all_modules.values():
+        if submodule in index_modules.values():
+            continue
+        for index_module in index_modules.values():
+            if submodule in index_module.submodules:
+                break
+        else: # if loop did not break
+            if submodule not in main_modules.values():
+                print(f"WARN: Unreferenced submodule '{submodule.fullname}'")
+    index = render.html_index(index_modules)
     if index:
+        for old_name, new_name in index_names.items():
+            index = index.replace(old_name, new_name)
         (out_dir / "index.html").write_bytes(index.encode())
 
     search = render.search_index(all_modules)
