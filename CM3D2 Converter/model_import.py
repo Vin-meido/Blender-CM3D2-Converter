@@ -621,8 +621,16 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             
             # Make sure no bones are length 0, otherwise blender deletes them
             for bone in arm.edit_bones:
-                if bone.length == 0:
-                    bone.length = 0.001
+                min_length = 0.0001
+                if bone.length < min_length:
+                    #print(f"{bone.name} IS ZERO!!!")
+                    bone.length = min_length
+                    if abs((bone.head - bone.tail).magnitude) < min_length * 0.9:
+                        print(f"{bone.name} IS STILL ZERO!!!")
+                        bone.tail = bone.head + mathutils.Vector((1,0,0)) * min_length
+                        print(f"set bone.tail = {bone.tail}; bone.head = {bone.head}")
+                    if abs((bone.head - bone.tail).magnitude) < min_length * 0.9:
+                        print(f"{bone.name} IS STILL ZERO AGAIN!!! BONE WILL BE DELETED!!!")
             
             # 一部ボーン削除
             if self.is_armature_clean:
