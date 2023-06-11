@@ -618,7 +618,12 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 if len(bone.children) == 0:
                     if bone.parent:
                         bone.length = bone.parent.length * 0.5
-
+            
+            # Make sure no bones are length 0, otherwise blender deletes them
+            for bone in arm.edit_bones:
+                if bone.length == 0:
+                    bone.length = 0.0001
+            
             # 一部ボーン削除
             if self.is_armature_clean:
                 for bone in arm.edit_bones:
