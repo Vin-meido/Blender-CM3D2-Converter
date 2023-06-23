@@ -621,8 +621,9 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             
             # Make sure no bones are length 0, otherwise blender deletes them
             for bone in arm.edit_bones:
-                if bone.length == 0:
-                    bone.length = 0.0001
+                min_length = 0.0001
+                if bone.length < min_length:
+                    bone.length = min_length
             
             # 一部ボーン削除
             if self.is_armature_clean:
