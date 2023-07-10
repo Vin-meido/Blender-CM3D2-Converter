@@ -14,6 +14,23 @@ bl_info = {
     "category": "Import-Export"
 }
 
+if "bpy" not in locals():
+    from . import package_helper
+else:
+    import imp
+    imp.reload(package_helper)
+
+# Install dependencies
+if not package_helper.check_module('pythonnet'):
+    print("Installing dependency 'pythonnet'...")
+    package_helper.install_package('pythonnet==3.0.1')
+    from bpy.ops.scripts import reload as bpy_ops_scripts_reload
+    bpy_ops_scripts_reload()
+    raise "Dependencies installed. Restart is required."
+else:
+    print("Package 'pythonnet' is installed")
+
+
 # サブスクリプト群をインポート
 if "bpy" in locals():
     import imp
@@ -65,11 +82,17 @@ if "bpy" in locals():
     imp.reload(misc_DOPESHEET_MT_editor_menus)
 
     imp.reload(translations)
+    
+    imp.reload(livelink)
+    imp.reload(serialization)
 
 else:
     from . import compat
     from . import common
     from . import cm3d2_data
+    
+    from . import livelink
+    from . import serialization
 
     from . import model_import
     from . import model_export
@@ -114,6 +137,8 @@ else:
     from . import misc_DOPESHEET_MT_editor_menus
 
     from . import translations
+
+
 
 import bpy, os.path, bpy.utils.previews
 
