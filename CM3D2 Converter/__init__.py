@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2023, 7, "pre-10"),
+    "version": ("luv", 2023, 7, "pre-11"),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -81,18 +81,17 @@ if "bpy" in locals():
     imp.reload(misc_VIEW3D_PT_tools_mesh_shapekey)
     imp.reload(misc_DOPESHEET_MT_editor_menus)
 
+    imp.reload(livelink)
+    
     imp.reload(translations)
     
-    imp.reload(livelink)
-    imp.reload(serialization)
+    # Trying to reload this breaks the plugin
+    #imp.reload(Managed)
 
 else:
     from . import compat
     from . import common
     from . import cm3d2_data
-    
-    from . import livelink
-    from . import serialization
 
     from . import model_import
     from . import model_export
@@ -137,6 +136,10 @@ else:
     from . import misc_DOPESHEET_MT_editor_menus
 
     from . import translations
+    
+    from . import livelink
+    
+    from . import Managed
 
 
 

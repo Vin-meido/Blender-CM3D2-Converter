@@ -11,6 +11,10 @@ class BlenderTestCase(TestCase):
         return str(Path(cm3d2converter.__file__).parent / 'append_data.blend')
     
     @property
+    def resources_dir(self) -> str:
+        return str(Path(__file__).parent / 'resources')
+    
+    @property
     def output_dir(self) -> str:
         return str(Path(__file__).parent / 'output')
         

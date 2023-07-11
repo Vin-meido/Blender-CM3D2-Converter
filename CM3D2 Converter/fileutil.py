@@ -3,6 +3,10 @@ import os
 import shutil
 import tempfile
 
+from . import Managed
+from System.IO import MemoryStream
+from CM3D2.Serialization import CM3D2Serializer, ICM3D2Serializable
+
 
 class TemporaryFileWriter(io.BufferedWriter):
     """ファイルをアトミックに更新します。"""
@@ -72,3 +76,11 @@ class TemporaryFileWriter(io.BufferedWriter):
         super(io.BufferedWriter, self).close()
         self.raw.close()
         os.remove(self.temppath)
+
+
+def serialize_to_file(data: ICM3D2Serializable, file: io.BufferedWriter):
+    serializer = CM3D2Serializer()
+    memory_stream = MemoryStream()
+    serializer.Serialize(memory_stream, data)
+    file.write(bytes(memory_stream.GetBuffer()))
+    

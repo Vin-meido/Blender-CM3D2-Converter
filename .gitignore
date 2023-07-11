@@ -1,6 +1,10 @@
-
 *.zip
 __pycache__
-docs/build/*
-venv/*
-test/output/*
+venv
+.venv
+
+docs/build
+test/output
+stubs
+logs
+
