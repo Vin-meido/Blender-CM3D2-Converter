@@ -10,9 +10,12 @@ import xml.sax.saxutils
 import addon_utils
 import bpy
 import traceback
+
 from . import common
 from . import compat
 from .translations.pgettext_functions import *
+
+from . import Managed
 
 
 # メニュー等に項目追加
@@ -170,10 +173,12 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
         zip_file.write(response.read())
         zip_file.close()
 
+        Managed.unload() # Unload dlls so they can be overwritten without error
+        
         zip_file = zipfile.ZipFile(zip_path, 'r')
         sub_dir = ""
         for path in zip_file.namelist():
-            if not sub_dir and os.path.split(os.path.split(path)[0])[1] == "CM3D2 Converter":
+            if not sub_dir and os.path.split(os.path.split(path)[0])[1] in ("CM3D2 Converter", "CM3D2_Converter"):
                 sub_dir = path
                 continue
             if not sub_dir or sub_dir not in path:
@@ -190,7 +195,6 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 os.mkdir(real_path)
 
         zip_file.close()
-        return {'CANCELLED'}
 
         if self.is_restart:
             filepath = bpy.data.filepath
@@ -209,7 +213,8 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converterを更新しました、再起動して下さい")
             else:
                 bpy.ops.scripts.reload()
-                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated")
+                
+                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully")
         return {'FINISHED'}
 
 

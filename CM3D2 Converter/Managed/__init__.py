@@ -7,6 +7,7 @@ from pathlib import Path as _Path
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 from clr import *
+from pythonnet import unload
 
 _sys.path.append(str(_Path(__file__).parent))
 

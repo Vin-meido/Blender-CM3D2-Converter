@@ -16,7 +16,8 @@ from . import misc_DOPESHEET_MT_editor_menus
 
 from . import Managed
 from CM3D2.Serialization.Files import Anm
-from CM3D2.Serialization.Collections import LengthPrefixedArray
+from CM3D2.Serialization.Performance import PerformanceExtensions
+from System import Array
 
 
 # メインオペレーター
@@ -882,21 +883,21 @@ class AnmBuilder:
                     track_data[bone_name][103][t] = (rot.w, tangent_in.w, tangent_out.w)
         return track_data
     
-    @staticmethod
-    def assemble_anm(bone_parents, bones, track_data, time_step, version=1000, auto_smooth=False) -> Anm:
+    #@staticmethod
+    def assemble_anm(self, bone_parents, bones, track_data, time_step, version=1000, auto_smooth=False) -> Anm:
         ''' Build Anm class from data'''
 
         anm = Anm()
         # anm.signature = 'CM3D2_ANIM'
         anm.version = version
-
-        for bone in bones:
-            if not track_data.get(bone.name):
-                continue
-            
-            # file.write(struct.pack('<?', True))
-            track = Anm.Track()
-            anm.tracks.Add(track)
+        
+        # Finding generic types can be slow, so do it once here
+        PopulateList_Channel_ = PerformanceExtensions.PopulateList[Anm.Track.Channel]
+        Array_Keyframe_ = Array[Anm.Track.Channel.Keyframe]
+        
+        bones_with_tracks = [ bone for bone in bones if track_data.get(bone.name) ]
+        PerformanceExtensions.PopulateList[Anm.Track](anm.tracks, len(bones_with_tracks))
+        for bone, track in zip(bones_with_tracks, anm.tracks):
             # track.channelId = 1
             
             bone_names = [bone.name]
@@ -908,15 +909,21 @@ class AnmBuilder:
             
             track.path = '/'.join(bone_names)
             
-            for channel_id, keyframes in sorted(track_data[bone.name].items(), key=lambda x: x[0]):
-                channel = Anm.Track.Channel()
-                track.channels.Add(channel)
+            PerformanceExtensions.PopulateList[Anm.Track.Channel](
+                track.channels, len(track_data[bone.name])
+            )
+            
+            for channel, (channel_id, keyframes) in zip(
+                    track.channels,
+                    sorted(track_data[bone.name].items(), key=lambda x: x[0])):
                 channel.channelId = channel_id
-                channel.keyframes = LengthPrefixedArray[Anm.Track.Channel.Keyframe](len(keyframes))
+                len_keyframes = len(keyframes)
+                channel_keyframes = Array_Keyframe_(len_keyframes)
+                channel.keyframes.UnsafeSetArray(channel_keyframes)
 
                 keyframes_list = sorted(keyframes.items(), key=lambda x: x[0])
                 for i in range(len(keyframes_list)):
-                    keyframe = channel.keyframes[i]
+                    keyframe = channel_keyframes[i]
                     
                     x = keyframes_list[i][0]
                     y, dydx_in, dydx_out = keyframes_list[i][1]
@@ -930,35 +937,43 @@ class AnmBuilder:
                         keyframe.tanIn = 0.0
                         keyframe.tanOut = 0.0
                     elif auto_smooth:
-                        if i == 0:
-                            prev_x = x - (keyframes_list[i + 1][0] - x)
-                            prev_y = y - (keyframes_list[i + 1][1][0] - y)
-                            next_x = keyframes_list[i + 1][0]
-                            next_y = keyframes_list[i + 1][1][0]
-                        elif i == len(keyframes_list) - 1:
-                            prev_x = keyframes_list[i - 1][0]
-                            prev_y = keyframes_list[i - 1][1][0]
-                            next_x = x + (x - keyframes_list[i - 1][0])
-                            next_y = y + (y - keyframes_list[i - 1][1][0])
-                        else:
-                            prev_x = keyframes_list[i - 1][0]
-                            prev_y = keyframes_list[i - 1][1][0]
-                            next_x = keyframes_list[i + 1][0]
-                            next_y = keyframes_list[i + 1][1][0]
-
-                        prev_rad = (prev_y - y) / (prev_x - x)
-                        next_rad = (next_y - y) / (next_x - x)
-                        join_rad = (prev_rad + next_rad) / 2
-
-                        tan_in  = join_rad if x - prev_x <= time_step * 1.5 else prev_rad
-                        tan_out = join_rad if next_x - x <= time_step * 1.5 else next_rad
+                        tan_in, tan_out = AnmBuilder.auto_calc_tangents(time_step, keyframes_list, i)
                         
                         keyframe.tanIn = tan_in
                         keyframe.tanOut = tan_out
 
-                    channel.keyframes[i] = keyframe
-                    
+                    channel_keyframes[i] = keyframe
+                       
         return anm
+
+    @staticmethod
+    def auto_calc_tangents(time_step, keyframes_list, i):
+        x = keyframes_list[i][0]
+        y = keyframes_list[i][1][0]
+        
+        if i == 0:
+            prev_x = x - (keyframes_list[i + 1][0] - x)
+            prev_y = y - (keyframes_list[i + 1][1][0] - y)
+            next_x = keyframes_list[i + 1][0]
+            next_y = keyframes_list[i + 1][1][0]
+        elif i == len(keyframes_list) - 1:
+            prev_x = keyframes_list[i - 1][0]
+            prev_y = keyframes_list[i - 1][1][0]
+            next_x = x + (x - keyframes_list[i - 1][0])
+            next_y = y + (y - keyframes_list[i - 1][1][0])
+        else:
+            prev_x = keyframes_list[i - 1][0]
+            prev_y = keyframes_list[i - 1][1][0]
+            next_x = keyframes_list[i + 1][0]
+            next_y = keyframes_list[i + 1][1][0]
+
+        prev_rad = (prev_y - y) / (prev_x - x)
+        next_rad = (next_y - y) / (next_x - x)
+        join_rad = (prev_rad + next_rad) / 2
+
+        tan_in  = join_rad if x - prev_x <= time_step * 1.5 else prev_rad
+        tan_out = join_rad if next_x - x <= time_step * 1.5 else next_rad
+        return tan_in,tan_out
 
 
 

@@ -1,6 +1,9 @@
 import bpy
 
 from blendertest import BlenderTestCase
+from profile_helpers import dump_test_stats, Profile, LineProfile
+
+import cm3d2converter
 
 class AnmExportTest(BlenderTestCase):
 
@@ -13,7 +16,6 @@ class AnmExportTest(BlenderTestCase):
             if child.collection.name == collections[0].name:
                 layer_collection = child
                 break
-        print(layer_collection)
         bpy.context.view_layer.active_layer_collection = layer_collection
         layer_collection.hide_viewport = False
         layer_collection.exclude = False
@@ -29,23 +31,27 @@ class AnmExportTest(BlenderTestCase):
     def test_anm_export(self):
         tpose_object: bpy.types.Object = bpy.data.objects.get('Tスタンス素体.armature')
         self.activate_object(tpose_object)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=f'{self.output_dir}/tpose_export_test.anm')
+        
+        bpy.ops.export_anim.export_cm3d2_anm(
+            filepath=f'{self.output_dir}/{self._testMethodName}.anm',
+            is_backup=False
+        )
         
     def test_anm_recursive(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
         self.activate_object(body001_armature_object)
         
         in_file = f'{self.resources_dir}/tpose.anm'
-        out_file_0 = f'{self.output_dir}/test_anm_recursive_0.anm'
-        out_file_1 = f'{self.output_dir}/test_anm_recursive_1.anm'
-        out_file_2 = f'{self.output_dir}/test_anm_recursive_2.anm'
+        out_file_0 = f'{self.output_dir}/{self._testMethodName}_0.anm'
+        out_file_1 = f'{self.output_dir}/{self._testMethodName}_1.anm'
+        out_file_2 = f'{self.output_dir}/{self._testMethodName}_2.anm'
         
         bpy.ops.import_anim.import_cm3d2_anm(filepath=in_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0)
-        bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_0)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_1)
-        bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_1)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_2)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0, is_backup=False)
+        bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_0, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_1, is_backup=False)
+        bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_1, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_2, is_backup=False)
         
         with open(in_file, 'rb') as reader:
             expected_data = reader.read()
@@ -60,3 +66,59 @@ class AnmExportTest(BlenderTestCase):
         print(len(actual_data_1))
         print(len(actual_data_2))
 
+    def testprofile_anm_export(self):
+        body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
+        self.activate_object(body001_armature_object)
+        
+        in_file = f'{self.resources_dir}/tpose.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d_001_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
+        out_file = f'{self.output_dir}/{self._testMethodName}.anm'
+        
+        
+        bpy.ops.import_anim.import_cm3d2_anm(filepath=in_file)
+        
+        #with ProfileLog(self.test_anm_recursive.__name__):
+        lineprof = LineProfile()
+        lineprof.add_module(cm3d2converter.anm_export)
+        prof = Profile()
+        lineprof.enable()
+        prof.enable()
+        
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        
+        dump_test_stats(self._testMethodName, prof, lineprof)
+        
+        
+    def testprofile_anm_export_with_warmup(self):
+        body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
+        self.activate_object(body001_armature_object)
+        
+        in_file = f'{self.resources_dir}/tpose.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d_001_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
+        out_file = f'{self.output_dir}/{self._testMethodName}.anm'
+        
+        
+        bpy.ops.import_anim.import_cm3d2_anm(filepath=in_file)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        
+        #with ProfileLog(self.test_anm_recursive.__name__):
+        lineprof = LineProfile()
+        lineprof.add_module(cm3d2converter.anm_export)
+        prof = Profile()
+        lineprof.enable()
+        prof.enable()
+        
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_backup=False)
+        
+        dump_test_stats(self._testMethodName, prof, lineprof)
+        

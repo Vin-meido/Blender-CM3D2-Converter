@@ -85,8 +85,8 @@ if "bpy" in locals():
     
     imp.reload(translations)
     
-    # Trying to reload this breaks the plugin
-    #imp.reload(Managed)
+    Managed.unload()
+    imp.reload(Managed)
 
 else:
     from . import compat

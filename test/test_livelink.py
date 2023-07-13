@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 
 from blendertest import BlenderTestCase
+from profile_helpers import ProfileLog
+
+import cm3d2converter
 
 class LiveLinkClientCLI:
-    exe_path = Path(__file__).parent.parent / 'CM3D2 Converter' / 'Managed' / 'COM3D2.LiveLink.CLI.exe'
+    exe_path = Path(cm3d2converter.Managed.__file__).parent / 'COM3D2.LiveLink.CLI.exe'
     
     def __init__(self, address: str = 'com3d2.livelink'):
         print(self.exe_path)
@@ -35,8 +38,8 @@ class TestLiveLink(BlenderTestCase):
         client = LiveLinkClientCLI(self.address)
         bpy.ops.com3d2livelink.wait_for_connection()
         bpy.ops.com3d2livelink.send_animation()
-        
-    def test_pose_link(self):
+    
+    def test_link_pose(self):
         tpose_object: bpy.types.Object = bpy.data.objects.get('Tスタンス素体.armature')
         bpy.context.view_layer.objects.active = tpose_object
         
@@ -45,5 +48,9 @@ class TestLiveLink(BlenderTestCase):
         bpy.ops.com3d2livelink.start_server(address=self.address, wait_for_connection=False)
         client = LiveLinkClientCLI(self.address)
         bpy.ops.com3d2livelink.wait_for_connection()
-        bpy.ops.com3d2livelink.send_animation()
+        bpy.ops.object.mode_set(mode='POSE')
+        
+        with ProfileLog(self.test_link_pose.__name__):
+            bpy.ops.com3d2livelink.link_pose()
+        
         
