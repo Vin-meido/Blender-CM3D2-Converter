@@ -744,12 +744,15 @@ class AnmBuilder:
         
         copied_action = None
         keyed_bones = None
-        if obj.animation_data and obj.animation_data.action:
-            copied_action = obj.animation_data.action.copy()
-            copied_action.name = obj.animation_data.action.name + "__anm_export"
-            fcurves = copied_action.fcurves
+        has_animation_action = obj.animation_data and obj.animation_data.action
+        if has_animation_action:
+            if self.export_method == 'KEYED': # This method modifies the action, so copy it.
+                copied_action = obj.animation_data.action.copy()
+                copied_action.name = obj.animation_data.action.name + "__anm_export"
+                fcurves = copied_action.fcurves
+            else:
+                fcurves = obj.animation_data.action.fcurves
             keyed_bones = self.get_keyed_bones(arm, fcurves)
-
         elif self.export_method == 'KEYED' or self.is_remove_unkeyed_bone:
             raise common.CM3D2ExportError(
                 "Active armature has no animation data / action. Please use \"{method}\" with \"{option}\" disabled, or bake keyframes before exporting.".format(
