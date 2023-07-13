@@ -70,8 +70,8 @@ class AnmExportTest(BlenderTestCase):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
         self.activate_object(body001_armature_object)
         
-        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         
         #with ProfileLog(self.test_anm_recursive.__name__):
         lineprof = LineProfile()
@@ -91,9 +91,9 @@ class AnmExportTest(BlenderTestCase):
         self.activate_object(body001_armature_object)
         
         in_file = f'{self.resources_dir}/tpose.anm'
-        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         in_file = f'{self.resources_dir}/dance_cm3d_001_f1.anm'
         in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         out_file = f'{self.output_dir}/{self._testMethodName}.anm'
         
         
@@ -118,9 +118,9 @@ class AnmExportTest(BlenderTestCase):
         self.activate_object(body001_armature_object)
         
         in_file = f'{self.resources_dir}/tpose.anm'
-        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         in_file = f'{self.resources_dir}/dance_cm3d_001_f1.anm'
         in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
+        in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
         out_file = f'{self.output_dir}/{self._testMethodName}.anm'
         
         

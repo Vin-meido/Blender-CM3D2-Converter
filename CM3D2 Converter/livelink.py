@@ -74,9 +74,14 @@ class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
     bl_label = "LiveLink"
     
     def draw(self, context):
+        global is_link_pose_active
+        
         self.layout.operator(LIVELINK_OT_start_server.bl_idname)
         self.layout.operator(LIVELINK_OT_send_animation.bl_idname)
-        self.layout.operator(LIVELINK_OT_link_pose.bl_idname)
+        if not is_link_pose_active:
+            self.layout.operator(LIVELINK_OT_link_pose.bl_idname)
+        else:
+            self.layout.operator(LIVELINK_OT_unlink_pose.bl_idname)
 
 
 @compat.BlRegister()
@@ -141,25 +146,32 @@ class LIVELINK_OT_send_animation(bpy.types.Operator):
 
     def execute(self, context):
         global active_livelink_core
+        global is_link_pose_active
         
-        pre_anm_export_path = common.preferences().anm_export_path
-        try:
-            temp_file_handle, temp_file_path = tempfile.mkstemp()
-            os.close(temp_file_handle)
+        if is_link_pose_active:
+            is_link_pose_active = False
             
-            bpy.ops.export_anim.export_cm3d2_anm(filepath=temp_file_path)
-            
-            with open(temp_file_path, 'rb') as data:
-                active_livelink_core.SendBytes(data.read())
-                active_livelink_core.Flush()
-            
-        finally:
-            common.preferences().anm_export_path = pre_anm_export_path
-            os.remove(temp_file_path)
+        current_frame = context.scene.frame_current
+        
+        builder = AnmBuilder()
+        builder.frame_start         = context.scene.frame_current
+        builder.frame_end           = context.scene.frame_end
+        builder.export_method       = 'ALL'
+        builder.is_visual_transform = True
+        
+        anm = builder.build_anm(context)
+        
+        serializer = CM3D2Serializer()
+        memory_stream = MemoryStream()
+        serializer.Serialize(memory_stream, anm)
+        active_livelink_core.SendBytes(memory_stream.GetBuffer(), memory_stream.Length)
+        active_livelink_core.Flush()
+        
+        context.scene.frame_current = current_frame
             
         return {'FINISHED'}
 
-
+is_link_pose_active = False
 @compat.BlRegister()
 class LIVELINK_OT_link_pose(bpy.types.Operator):
     """Operator which runs its self from a timer"""
@@ -179,9 +191,13 @@ class LIVELINK_OT_link_pose(bpy.types.Operator):
         
     def modal(self, context, event):
         global active_livelink_core
+        global is_link_pose_active
         
         if not self.poll(context):
             self.cancel(context)
+            return {'CANCELLED'}
+        
+        if not is_link_pose_active:
             return {'CANCELLED'}
         
         if event.type == 'TIMER':
@@ -194,6 +210,8 @@ class LIVELINK_OT_link_pose(bpy.types.Operator):
         self.timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
         
+        global is_link_pose_active
+        is_link_pose_active = True
         self.update_pose(context)
         return {'RUNNING_MODAL'}
 
@@ -201,6 +219,7 @@ class LIVELINK_OT_link_pose(bpy.types.Operator):
         global active_livelink_core
         
         builder = AnmBuilder()
+        builder.no_set_frame        = True
         builder.frame_start         = context.scene.frame_current
         builder.frame_end           = context.scene.frame_current
         builder.export_method       = 'ALL'
@@ -217,5 +236,29 @@ class LIVELINK_OT_link_pose(bpy.types.Operator):
     def cancel(self, context):
         wm = context.window_manager
         wm.event_timer_remove(self.timer)
-        
+        global is_link_pose_active
+        is_link_pose_active = False
+
+
+@compat.BlRegister()
+class LIVELINK_OT_unlink_pose(bpy.types.Operator):
+    """Operator which runs its self from a timer"""
+    bl_idname = 'com3d2livelink.unlink_pose'
+    bl_label = "Unlink Pose"
+    bl_options = {'UNDO'}
+    
+    timer = None
+    
+    @classmethod
+    def poll(cls, context):
+        global active_livelink_core
+        if not active_livelink_core or not active_livelink_core.IsConnected:
+            return False
+        global is_link_pose_active
+        return is_link_pose_active
+
+    def execute(self, context):
+        global is_link_pose_active
+        is_link_pose_active = False
+        return {'FINISHED'}
 
