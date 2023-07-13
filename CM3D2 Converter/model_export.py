@@ -512,7 +512,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         try:
             with writer:
                 self.write_model(context, ob, writer, **model_datas)
-        except common.CM3D2ExportException as e:
+        except common.CM3D2ExportError as e:
             self.report(type={'ERROR'}, message=str(e))
             return {'CANCELLED'}
 
@@ -571,7 +571,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                     vert_indices[vert.index] = vert_count
                     vert_count += 1
         if 65535 < vert_count:
-            raise common.CM3D2ExportException(f_tip_("頂点数がまだ多いです (現在{}頂点)。あと{}頂点以上減らしてください、中止します", vert_count, vert_count - 65535))
+            raise common.CM3D2ExportError(f_tip_("頂点数がまだ多いです (現在{}頂点)。あと{}頂点以上減らしてください、中止します", vert_count, vert_count - 65535))
         context.window_manager.progress_update(5)
 
         writer.write(struct.pack('<2i', vert_count, len(ob.material_slots)))

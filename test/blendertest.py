@@ -22,6 +22,7 @@ class BlenderTestCase(TestCase):
         super().setUp()
         bpy.ops.wm.open_mainfile(filepath=self.blend_file_path)
         cm3d2converter.register()
+        cm3d2converter.common.preferences().backup_ext = ''
         
 class BlenderTest(BlenderTestCase):
     

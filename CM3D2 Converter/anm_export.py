@@ -153,7 +153,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
                     builder = self.get_anm_builder()
                     anm = builder.build_anm(context)
                     serialize_to_file(anm, file)
-        except common.CM3D2ExportException as e:
+        except common.CM3D2ExportError as e:
             self.report(type={'ERROR'}, message=str(e))
             return {'CANCELLED'}
 
@@ -206,7 +206,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
                         keyed_bones[prop].append(bone.name)
 
         elif self.export_method == 'KEYED' or self.is_remove_unkeyed_bone:
-            raise common.CM3D2ExportException(
+            raise common.CM3D2ExportError(
                 "Active armature has no animation data / action. Please use \"{method}\" with \"{option}\" disabled, or bake keyframes before exporting.".format(
                     method = "Bake All Frames",
                     option = "Remove Unkeyed Bones"
@@ -378,7 +378,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     def write_animation_from_text(self, context, file):
         txt = context.blend_data.texts.get("AnmData")
         if not txt:
-            raise common.CM3D2ExportException("There is no 'AnmData' text file.")
+            raise common.CM3D2ExportError("There is no 'AnmData' text file.")
 
         import json
         anm_data = json.loads(txt.as_string())
@@ -486,7 +486,7 @@ class AnmBuilder:
         pre_rots = {}
         for key_frame_index in range(self.key_frame_count):
             if self.key_frame_count == 1:
-                frame = 0.0
+                frame = self.frame_start
             else:
                 frame = (self.frame_end - self.frame_start) / (self.key_frame_count - 1) * key_frame_index + self.frame_start
             context.scene.frame_set(frame=int(frame), subframe=frame - int(frame))
@@ -746,7 +746,7 @@ class AnmBuilder:
             keyed_bones = self.get_keyed_bones(arm, fcurves)
 
         elif self.export_method == 'KEYED' or self.is_remove_unkeyed_bone:
-            raise common.CM3D2ExportException(
+            raise common.CM3D2ExportError(
                 "Active armature has no animation data / action. Please use \"{method}\" with \"{option}\" disabled, or bake keyframes before exporting.".format(
                     method = "Bake All Frames",
                     option = "Remove Unkeyed Bones"
@@ -762,8 +762,6 @@ class AnmBuilder:
 
         if copied_action:
             context.blend_data.actions.remove(copied_action, do_unlink=True, do_id_user=True, do_ui_user=True)
-
-        track_data = self.get_track_data(anm_data_raw)
                                                       
         return bones, anm_data_raw
 

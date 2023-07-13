@@ -57,9 +57,7 @@ def preferences():
                     if name not in _props.keys():
                         raise AttributeError(self, name)
                     _props[name] = value
-            return FakeAddonPreferences()
-            
-            
+            PREFS = FakeAddonPreferences()
     return PREFS
 
 
@@ -1045,11 +1043,15 @@ def trigonometric_smooth(x):
 
 
 # エクスポート例外クラス
-class CM3D2ExportException(Exception):
-    pass
+class CM3D2ExportError(Exception):
+    def __init__(self, message, *args):
+        super().__init__(message, *args)
+        self.message = message
 
-class CM3D2ImportException(Exception):
-    pass
+class CM3D2ImportError(Exception):
+    def __init__(self, message, *args):
+        super().__init__(message, *args)
+        self.message = message
 
 
 # ノード取得クラス

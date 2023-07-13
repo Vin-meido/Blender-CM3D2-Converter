@@ -73,7 +73,7 @@ class CNV_OT_export_cm3d2_tex(bpy.types.Operator):
                 self.write_texture(context, file, version_num)
             self.report(type={'INFO'}, message="texファイルを出力しました。" + self.filepath)
 
-        except common.CM3D2ExportException as e:
+        except common.CM3D2ExportError as e:
             self.report(type={'ERROR'}, message=str(e))
             return {'CANCELLED'}
         except Exception as e:
@@ -103,7 +103,7 @@ class CNV_OT_export_cm3d2_tex(bpy.types.Operator):
             if os.path.exists(temp_path):
                 is_remove = False
             else:
-                raise common.CM3D2ExportException("PNGファイルの取得に失敗しました")
+                raise common.CM3D2ExportError("PNGファイルの取得に失敗しました")
         if pre_source != 'VIEWER':
             img.filepath = pre_filepath
             img.source = pre_source

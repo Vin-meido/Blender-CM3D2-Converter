@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import io
 import os
 import shutil
 import tempfile
+from typing import TypeVar
 
 from . import Managed
 from System.IO import MemoryStream
@@ -82,5 +85,11 @@ def serialize_to_file(data: ICM3D2Serializable, file: io.BufferedWriter):
     serializer = CM3D2Serializer()
     memory_stream = MemoryStream()
     serializer.Serialize(memory_stream, data)
-    file.write(bytes(memory_stream.GetBuffer()))
+    file.write(bytes(memory_stream.GetBuffer())[:memory_stream.Length])
+
+TCM3D2Serializable = TypeVar('TCM3D2Serializable', bound=ICM3D2Serializable)
+def deserialize_from_file(file_type: type[TCM3D2Serializable], file: io.BufferedWriter) -> TCM3D2Serializable:
+    serializer = CM3D2Serializer()
+    memory_stream = MemoryStream(file.read())
+    return serializer.Deserialize[file_type](memory_stream)
     
