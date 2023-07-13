@@ -47,7 +47,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     
     frame_start = bpy.props.IntProperty(name="開始フレーム", default=0, min=0, max=99999, soft_min=0, soft_max=99999, step=1)
     frame_end = bpy.props.IntProperty(name="最終フレーム", default=0, min=0, max=99999, soft_min=0, soft_max=99999, step=1)
-    key_frame_count = bpy.props.IntProperty(name="キーフレーム数", default=1, min=1, max=99999, soft_min=1, soft_max=99999, step=1)
+    key_frame_count = bpy.props.IntProperty(name="キーフレーム数", default=-1, min=-1, max=99999, soft_min=1, soft_max=99999, step=1)
     time_scale = bpy.props.FloatProperty(name="再生速度", default=1.0, min=0.1, max=10.0, soft_min=0.1, soft_max=10.0, step=10, precision=1)
     is_keyframe_clean = bpy.props.BoolProperty(name="同じ変形のキーフレームを掃除", default=True)
     is_visual_transform = bpy.props.BoolProperty(name="Use Visual Transforms", default=True )
@@ -89,7 +89,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         self.frame_end = context.scene.frame_end
         self.scale = 1.0 / prefs.scale
         self.is_backup = bool(prefs.backup_ext)
-        self.key_frame_count = (context.scene.frame_end - context.scene.frame_start) + 1
+        self.key_frame_count = -1
 
         if "BoneData:0" in arm:
             self.bone_parent_from = 'ARMATURE_PROPERTY'
@@ -432,7 +432,7 @@ class AnmBuilder:
         self.export_method = 'ALL'
         self.frame_start = 0
         self.frame_end = 0
-        self.key_frame_count = 1
+        self.key_frame_count = -1
         self.time_scale = 1
         self.is_keyframe_clean = True
         self.is_visual_transform = True
@@ -481,14 +481,19 @@ class AnmBuilder:
                 else:
                     self.slope = 0
 
+        
+        key_frame_count = self.key_frame_count
+        if key_frame_count == -1:
+            key_frame_count = (self.frame_end - self.frame_start) + 1
+            
         same_locs = {}
         same_rots = {}
         pre_rots = {}
-        for key_frame_index in range(self.key_frame_count):
-            if self.key_frame_count == 1:
+        for key_frame_index in range(key_frame_count):
+            if key_frame_count == 1:
                 frame = self.frame_start
             else:
-                frame = (self.frame_end - self.frame_start) / (self.key_frame_count - 1) * key_frame_index + self.frame_start
+                frame = (self.frame_end - self.frame_start) / (key_frame_count - 1) * key_frame_index + self.frame_start
             context.scene.frame_set(frame=int(frame), subframe=frame - int(frame))
             if compat.IS_LEGACY:
                 context.scene.update()
@@ -541,7 +546,7 @@ class AnmBuilder:
                 #
                 #    rot.w, rot.x, rot.y, rot.z = -rot.y, -rot.z, -rot.x, rot.w
                 
-                if not self.is_keyframe_clean or key_frame_index == 0 or key_frame_index == self.key_frame_count - 1:
+                if not self.is_keyframe_clean or key_frame_index == 0 or key_frame_index == key_frame_count - 1:
                     anm_data_raw[bone.name]["LOC"][time] = loc.copy()
                     anm_data_raw[bone.name]["ROT"][time] = rot.copy()
 
