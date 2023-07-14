@@ -195,6 +195,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 try:
                     file = open(str(real_path), 'wb') # open() will automatically create it if it does not exist
                 except:
+                    file = None
                     # Check if the file needs to be updated first
                     with open(str(real_path), 'rb') as old_file:
                         old_hash = hashlib.md5(old_file.read()    ).hexdigest()
