@@ -190,6 +190,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 continue
             relative_path = Path(path).relative_to(sub_dir)
             real_path = addon_path / relative_path
+            
             # If it is a file
             if os.path.basename(path): # is a file
                 file = None
@@ -212,12 +213,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 if file is not None:
                     file.write(zip_file.read(path))
                     file.close()
-                #except:
-                #    with open(str(real_path), 'rb') as old_file:
-                #        old_file_bytes = old_file.read()
-                #        new_file_bytes = zip_file.read(path)
-                #    if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
-                #        self.report(type={'ERROR'}, message=f"Could not update file {path}. Please update manually.")
+                    
             # If it is a missing directory
             elif not real_path.exists():
                 os.mkdir(real_path)
@@ -287,7 +283,6 @@ class INFO_MT_help_cm3d2_converter_reload_notice(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Scripts must be reloaded to apply changes.")
-        
-        layout.separator()
-        
-        layout.operator('script.reload')
+        layout.label(text="Top Bar > Blender Logo > System > Reload Scripts")
+        # layout.separator()
+        # layout.operator('wm.call_menu', text="Show me").name = 'TOPBAR_MT_blender_system'
