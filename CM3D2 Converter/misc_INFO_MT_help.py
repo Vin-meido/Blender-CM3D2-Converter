@@ -195,7 +195,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                     file.close()
                 except:
                     with open(real_path, 'rb') as old_file:
-                        old_file_bytes = file.read()
+                        old_file_bytes = old_file.read()
                         new_file_bytes = zip_file.read(path)
                     if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
                         self.report(type={'ERROR'}, message=f"Could not update file {path}. Please update manually.")
