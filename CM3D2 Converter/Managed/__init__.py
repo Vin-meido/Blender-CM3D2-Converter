@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING as _TYPE_CHECKING
 _MANAGED_DIR = _Path(__file__).parent
 
 import pythonnet as _pythonnet
-_pythonnet.set_runtime('netfx', domain=bytes('CM3D2Converter', encoding='ASCII'), config_file=str(_MANAGED_DIR / 'runtimeconfig.json'))
+_pythonnet.set_runtime('netfx')
 
 from clr import *
 _sys.path.append(str(_MANAGED_DIR))
