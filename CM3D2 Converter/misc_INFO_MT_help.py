@@ -199,7 +199,9 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                     with open(str(real_path), 'rb') as old_file:
                         old_file_bytes = old_file.read()
                         new_file_bytes = zip_file.read(path)
-                    if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
+                    old_hash = hashlib.md5(old_file_bytes).hexdigest()
+                    new_hash = hashlib.md5(new_file_bytes).hexdigest()
+                    if old_hash != new_hash:
                         self.is_restart = True  # Must restart to update files
                         old_dir = addon_path / '_old'
                         if not old_dir.exists():
