@@ -6,10 +6,13 @@ import sys as _sys
 from pathlib import Path as _Path
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
-from clr import *
-from pythonnet import unload
+_MANAGED_DIR = _Path(__file__).parent
 
-_sys.path.append(str(_Path(__file__).parent))
+import pythonnet as _pythonnet
+_pythonnet.set_runtime('netfx', domain='CM3D2Converter', config_file=str(_MANAGED_DIR / 'runtimeconfig.json'))
+
+from clr import *
+_sys.path.append(str(_MANAGED_DIR))
 
 if _TYPE_CHECKING:
     def AddReference(dll_name: str):

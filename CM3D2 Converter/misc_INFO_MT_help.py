@@ -241,6 +241,7 @@ class CNV_OT_show_cm3d2_converter_preference(bpy.types.Operator):
             if info['name'] == common.ADDON_NAME:
                 my_info = info
                 break
+        bpy.ops.screen.userpref_show()
         area = common.get_request_area(context, compat.pref_type())
         if area and my_info:
             compat.get_prefs(context).active_section = 'ADDONS'
