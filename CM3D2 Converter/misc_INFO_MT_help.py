@@ -203,7 +203,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                         old_hash = hashlib.md5(old_file.read()    ).hexdigest()
                         new_hash = hashlib.md5(zip_file.read(path)).hexdigest()
                     if old_hash != new_hash:
-                        self.is_restart = True  # Must restart to update files
+                        # self.is_restart = True
                         old_dir = addon_path / '_old'
                         if not old_dir.exists():
                             os.mkdir(old_dir)
@@ -238,7 +238,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
             else:
                 bpy.ops.preferences.addon_refresh()
                 bpy.ops.wm.call_menu(name=INFO_MT_help_cm3d2_converter_reload_notice.bl_idname)
-                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully")
+                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully. Reload scripts to apply changes.")
         return {'FINISHED'}
 
 
