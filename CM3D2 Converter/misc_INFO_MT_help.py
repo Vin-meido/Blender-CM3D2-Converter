@@ -12,6 +12,7 @@ import bpy
 import traceback
 import shutil
 import hashlib
+import random
 from pathlib import Path
 
 from . import common
@@ -194,7 +195,11 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 try:
                     file = open(str(real_path), 'wb') # open() will automatically create it if it does not exist
                 except:
-                    shutil.move(real_path, real_path.parent / '_old' / real_path.name)
+                    old_dir = addon_path / '_old'
+                    if not old_dir.exists():
+                        os.mkdir(real_path)
+                    move_path = old_dir / f'~{random.randint(0, 999999)}.{real_path.name}'
+                    shutil.move(real_path, move_path)
                     file = open(str(real_path), 'wb')
                 file.write(zip_file.read(path))
                 file.close()
@@ -205,7 +210,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 #    if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
                 #        self.report(type={'ERROR'}, message=f"Could not update file {path}. Please update manually.")
             # If it is a missing directory
-            elif not os.path.exists(real_path):
+            elif not real_path.exists():
                 os.mkdir(real_path)
 
         zip_file.close()
