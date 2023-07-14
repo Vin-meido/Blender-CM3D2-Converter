@@ -10,8 +10,8 @@ import bmesh
 import mathutils
 from . import common
 from . import compat
-from .translations.pgettext_functions import *
-from .fileutil import serialize_to_file
+from . translations.pgettext_functions import *
+from . fileutil import serialize_to_file
 from . import misc_DOPESHEET_MT_editor_menus
 
 from . import Managed

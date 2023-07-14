@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from . import common
 from . import compat
-from .anm_export import AnmBuilder
+from . anm_export import AnmBuilder
 
 from . import Managed
 from COM3D2.LiveLink import *

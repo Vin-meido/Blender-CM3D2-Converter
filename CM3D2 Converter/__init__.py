@@ -44,6 +44,7 @@ if True:
     from . import compat
     from . import common
     from . import cm3d2_data
+    from . import Managed
 
     from . import model_import
     from . import model_export
@@ -91,11 +92,10 @@ if True:
 
     from . import livelink
 
-    from . import Managed
 
 
 # Save modules that were loaded in the previous section
-for local, module in locals().items():
+for local, module in locals().copy().items():
     if local not in _pre_locals:
         _SUB_MODULES.append(module)
             
