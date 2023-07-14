@@ -10,6 +10,8 @@ import xml.sax.saxutils
 import addon_utils
 import bpy
 import traceback
+import shutil
+import hashlib
 
 from . import common
 from . import compat
@@ -187,9 +189,16 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
             real_path = os.path.join(addon_path, relative_path)
             # If it is a file
             if os.path.basename(path): # is a file
-                file = open(real_path, 'wb') # open() will automatically create it if it does not exist
-                file.write(zip_file.read(path))
-                file.close()
+                try:
+                    file = open(real_path, 'wb') # open() will automatically create it if it does not exist
+                    file.write(zip_file.read(path))
+                    file.close()
+                except:
+                    with open(real_path, 'rb') as old_file:
+                        old_file_bytes = file.read()
+                        new_file_bytes = zip_file.read(path)
+                    if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
+                        self.report(type={'ERROR'}, message=f"Could not update file {path}. Please update manually.")
             # If it is a missing directory
             elif not os.path.exists(real_path):
                 os.mkdir(real_path)
