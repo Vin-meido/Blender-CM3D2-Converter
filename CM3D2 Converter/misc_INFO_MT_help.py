@@ -27,8 +27,9 @@ def menu_func(self, context):
     icon_id = common.kiss_icon()
     self.layout.separator()
     self.layout.operator('script.update_cm3d2_converter', icon_value=icon_id)
-    self.layout.operator('wm.call_menu', icon_value=icon_id, text="CM3D2 Converterの更新履歴").name = 'INFO_MT_help_CM3D2_Converter_RSS'
+    self.layout.operator('wm.call_menu', icon_value=icon_id, text=INFO_MT_help_CM3D2_Converter_RSS.bl_label).name = INFO_MT_help_CM3D2_Converter_RSS.bl_idname
     self.layout.operator('wm.show_cm3d2_converter_preference', icon_value=icon_id)
+    # self.layout.operator('wm.call_menu', icon_value=icon_id, text=INFO_MT_help_cm3d2_converter_reload_notice.bl_label).name = INFO_MT_help_cm3d2_converter_reload_notice.bl_idname
 
 
 # 更新履歴メニュー
@@ -240,8 +241,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converterを更新しました、再起動して下さい")
             else:
                 bpy.ops.preferences.addon_refresh()
-                wm = context.window_manager
-                wm.invoke_confirm(operator=bpy.ops.script.reload)
+                bpy.ops.wm.call_menu(name=INFO_MT_help_cm3d2_converter_reload_notice.bl_idname)
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully")
         return {'FINISHED'}
 
@@ -277,3 +277,17 @@ class CNV_OT_show_cm3d2_converter_preference(bpy.types.Operator):
             self.report(type={'ERROR'}, message="表示できるエリアが見つかりませんでした")
             return {'CANCELLED'}
         return {'FINISHED'}
+
+
+@compat.BlRegister()
+class INFO_MT_help_cm3d2_converter_reload_notice(bpy.types.Menu):
+    bl_idname = 'INFO_MT_help_cm3d2_converter_reload_notice'
+    bl_label = "CM3D2 Converter Reload Notice"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Scripts must be reloaded to apply changes.")
+        
+        layout.separator()
+        
+        layout.operator('script.reload')
