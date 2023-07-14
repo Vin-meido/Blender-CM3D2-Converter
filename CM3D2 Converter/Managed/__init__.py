@@ -11,6 +11,7 @@ _MANAGED_DIR = _Path(__file__).parent
 import pythonnet as _pythonnet
 _pythonnet.set_runtime('netfx')
 
+from pythonnet import unload
 from clr import *
 _sys.path.append(str(_MANAGED_DIR))
 

@@ -95,14 +95,19 @@ if True:
 
 
 # Save modules that were loaded in the previous section
-for local, module in locals().copy().items():
-    if local not in _pre_locals:
+for key, module in locals().copy().items():
+    if key == '_pre_locals':
+        continue
+    if key not in _pre_locals:
+        print(f'local = {key}')
+        print(f'module = {module}')
         _SUB_MODULES.append(module)
             
 if 'bpy' in locals():
     import importlib
     Managed.unload()
     for module in _SUB_MODULES:
+        print(f"Reload module {module}")
         try:
             importlib.reload(module)
         except ModuleNotFoundError:
