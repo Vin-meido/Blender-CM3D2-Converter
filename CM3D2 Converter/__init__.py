@@ -14,81 +14,33 @@ bl_info = {
     "category": "Import-Export"
 }
 
-if "bpy" not in locals():
-    from . import package_helper
-else:
-    import imp
-    imp.reload(package_helper)
+import importlib
+from . import package_helper
+
+if 'bpy' in locals():
+    importlib.reload(package_helper)
 
 # Install dependencies
-if not package_helper.check_module('pythonnet'):
-    print("Installing dependency 'pythonnet'...")
-    package_helper.install_package('pythonnet==3.0.1')
-    from bpy.ops.script import reload as bpy_ops_script_reload
-    bpy_ops_script_reload()
-    raise "Dependencies installed. Restart is required."
-else:
-    print("Package 'pythonnet' is installed")
+def install_dependencies():
+    import bpy  # import inside a function, so "bpy" in locals() check later is unchanged
+    if not package_helper.check_module('pythonnet'):
+        print("Installing dependency 'pythonnet'...")
+        package_helper.install_package('pythonnet==3.0.1')
+        from bpy.ops.script import reload as bpy_ops_script_reload
+        bpy_ops_script_reload()
+        raise "Dependencies installed. Restart is required."
+    else:
+        print("Package 'pythonnet' is installed")
+install_dependencies()
 
+
+# Dynamically detect what modules are imported in the following section
+if '_SUB_MODULES' not in locals():
+    _SUB_MODULES = []
+_pre_locals = locals().copy()
 
 # サブスクリプト群をインポート
-if "bpy" in locals():
-    import imp
-
-    imp.reload(compat)
-    imp.reload(common)
-    imp.reload(cm3d2_data)
-
-    imp.reload(model_import)
-    imp.reload(model_export)
-
-    imp.reload(anm_import)
-    imp.reload(anm_export)
-
-    imp.reload(tex_import)
-    imp.reload(tex_export)
-
-    imp.reload(mate_import)
-    imp.reload(mate_export)
-
-    imp.reload(menu_file)
-    imp.reload(menu_OBJECT_PT_cm3d2_menu)
-
-    imp.reload(misc_DATA_PT_context_arm)
-    imp.reload(misc_DATA_PT_modifiers)
-    imp.reload(misc_DATA_PT_vertex_groups)
-    imp.reload(misc_IMAGE_HT_header)
-    imp.reload(misc_IMAGE_PT_image_properties)
-    imp.reload(misc_INFO_HT_header)
-    imp.reload(misc_INFO_MT_add)
-    imp.reload(misc_INFO_MT_curve_add)
-    imp.reload(misc_INFO_MT_help)
-    imp.reload(misc_MATERIAL_PT_context_material)
-    imp.reload(misc_MESH_MT_attribute_context_menu)
-    imp.reload(misc_MESH_MT_shape_key_specials)
-    imp.reload(misc_MESH_MT_vertex_group_specials)
-    imp.reload(misc_OBJECT_PT_context_object)
-    imp.reload(misc_OBJECT_PT_transform)
-    imp.reload(misc_RENDER_PT_bake)
-    imp.reload(misc_RENDER_PT_render)
-    imp.reload(misc_TEXTURE_PT_context_texture)
-    imp.reload(misc_TEXT_HT_header)
-    imp.reload(misc_VIEW3D_MT_edit_mesh_merge)
-    imp.reload(misc_VIEW3D_MT_edit_mesh_specials)
-    imp.reload(misc_VIEW3D_MT_edit_mesh_split)
-    imp.reload(misc_VIEW3D_MT_pose_apply)
-    imp.reload(misc_VIEW3D_PT_tools_weightpaint)
-    imp.reload(misc_VIEW3D_PT_tools_mesh_shapekey)
-    imp.reload(misc_DOPESHEET_MT_editor_menus)
-
-    imp.reload(livelink)
-    
-    imp.reload(translations)
-    
-    Managed.unload()
-    imp.reload(Managed)
-
-else:
+if True:
     from . import compat
     from . import common
     from . import cm3d2_data
@@ -136,20 +88,28 @@ else:
     from . import misc_DOPESHEET_MT_editor_menus
 
     from . import translations
-    
+
     from . import livelink
-    
+
     from . import Managed
 
 
+# Save modules that were loaded in the previous section
+for local, module in locals().items():
+    if local not in _pre_locals:
+        _SUB_MODULES.append(module)
+            
+if 'bpy' in locals():
+    import importlib
+    Managed.unload()
+    for module in _SUB_MODULES:
+        try:
+            importlib.reload(module)
+        except ModuleNotFoundError:
+            # module was renamed or moved
+            pass
 
 import bpy, os.path, bpy.utils.previews
-
-
-# Backwards compatability
-if compat.IS_LEGACY:
-    bl_info["blender"] = (2, 78, 0)
-
 
 
 # アドオン設定
