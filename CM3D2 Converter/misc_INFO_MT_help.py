@@ -239,8 +239,8 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
             if compat.IS_LEGACY:
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converterを更新しました、再起動して下さい")
             else:
-                bpy.ops.script.reload()
-                # bpy.ops.preferences.addon_refresh()
+                bpy.ops.preferences.addon_refresh()
+                # bpy.ops.script.reload()
                 
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully")
         return {'FINISHED'}
