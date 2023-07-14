@@ -195,15 +195,21 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 try:
                     file = open(str(real_path), 'wb') # open() will automatically create it if it does not exist
                 except:
-                    self.is_restart = True  # Must restart to update files
-                    old_dir = addon_path / '_old'
-                    if not old_dir.exists():
-                        os.mkdir(old_dir)
-                    move_path = old_dir / f'~{random.randint(0, 999999)}.{real_path.name}'
-                    shutil.move(real_path, move_path)
-                    file = open(str(real_path), 'wb')
-                file.write(zip_file.read(path))
-                file.close()
+                    # Check if the file needs to be updated first
+                    with open(str(real_path), 'rb') as old_file:
+                        old_file_bytes = old_file.read()
+                        new_file_bytes = zip_file.read(path)
+                    if hashlib.md5(old_file_bytes) != hashlib.md5(new_file_bytes):
+                        self.is_restart = True  # Must restart to update files
+                        old_dir = addon_path / '_old'
+                        if not old_dir.exists():
+                            os.mkdir(old_dir)
+                        move_path = old_dir / f'~{random.randint(0, 999999)}.{real_path.name}'
+                        shutil.move(real_path, move_path)
+                        file = open(str(real_path), 'wb')
+                if file is not None:
+                    file.write(zip_file.read(path))
+                    file.close()
                 #except:
                 #    with open(str(real_path), 'rb') as old_file:
                 #        old_file_bytes = old_file.read()
