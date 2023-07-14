@@ -28,7 +28,11 @@ class BlRegister():
         if hasattr(cls, 'bl_idname'):
             bl_idname = cls.bl_idname
         else:
-            if self.use_bl_attr:
+            use_bl_attr = self.use_bl_attr \
+                          and hasattr(cls, 'bl_space_type' ) \
+                          and hasattr(cls, 'bl_region_type') \
+                          and hasattr(cls, 'bl_label'      )
+            if use_bl_attr:
                 bl_ctx = getattr(cls, 'bl_context', '')
                 bl_idname = f'{cls.bl_space_type}{cls.bl_region_type}{bl_ctx}{cls.bl_label}'
             else:

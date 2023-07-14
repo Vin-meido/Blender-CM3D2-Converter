@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2023, 7, "pre-13a"),
+    "version": ("luv", 2023, 7, "pre-14"),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -425,6 +425,8 @@ def register():
     setattr(bpy.types.Object, 'cm3d2_bone_morph' , bpy.props.PointerProperty(type=misc_DATA_PT_context_arm.CNV_PG_cm3d2_bone_morph ))
     setattr(bpy.types.Object, 'cm3d2_wide_slider', bpy.props.PointerProperty(type=misc_DATA_PT_context_arm.CNV_PG_cm3d2_wide_slider))
     setattr(bpy.types.Object, 'cm3d2_menu'       , bpy.props.PointerProperty(type=menu_file.OBJECT_PG_CM3D2Menu                    ))
+    setattr(bpy.types.WindowManager, 'com3d2_livelink_settings', bpy.props.PointerProperty(type=livelink.COM3D2LiveLinkSettings))
+    setattr(bpy.types.WindowManager, 'com3d2_livelink_state'   , bpy.props.PointerProperty(type=livelink.COM3D2LiveLinkState   ))
     
     bpy.types.DOPESHEET_MT_editor_menus.append(misc_DOPESHEET_MT_editor_menus.menu_func)
     bpy.types.GRAPH_MT_editor_menus.append(misc_DOPESHEET_MT_editor_menus.menu_func)
@@ -521,6 +523,10 @@ def unregister():
         delattr(bpy.types.Object, 'cm3d2_wide_slider')
     if hasattr(bpy.types.Object, 'cm3d2_menu'):
         delattr(bpy.types.Object, 'cm3d2_menu')
+    if hasattr(bpy.types.WindowManager, 'com3d2_livelink_settings'):
+        delattr(bpy.types.WindowManager, 'com3d2_livelink_settings')
+    if hasattr(bpy.types.WindowManager, 'com3d2_livelink_state'):
+        delattr(bpy.types.WindowManager, 'com3d2_livelink_state')
 
     bpy.types.DOPESHEET_MT_editor_menus.remove(misc_DOPESHEET_MT_editor_menus.menu_func)
     bpy.types.GRAPH_MT_editor_menus.remove(misc_DOPESHEET_MT_editor_menus.menu_func)

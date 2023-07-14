@@ -504,7 +504,7 @@ class AnmBuilder:
                     layer = context.view_layer
                     layer.update()
 
-            time = frame / fps * (1.0 / self.time_scale)
+            time = (frame - self.frame_start) / fps * (1.0 / self.time_scale)
 
             for bone in bones:
                 if bone.name not in anm_data_raw:
