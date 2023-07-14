@@ -197,7 +197,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 except:
                     old_dir = addon_path / '_old'
                     if not old_dir.exists():
-                        os.mkdir(real_path)
+                        os.mkdir(old_dir)
                     move_path = old_dir / f'~{random.randint(0, 999999)}.{real_path.name}'
                     shutil.move(real_path, move_path)
                     file = open(str(real_path), 'wb')
