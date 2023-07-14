@@ -177,7 +177,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
         zip_file.write(response.read())
         zip_file.close()
 
-        Managed.unload() # Unload dlls so they can be overwritten without error
+        Managed.unload()
         
         zip_file = zipfile.ZipFile(zip_path, 'r')
         sub_dir = ""
@@ -195,6 +195,7 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                 try:
                     file = open(str(real_path), 'wb') # open() will automatically create it if it does not exist
                 except:
+                    self.is_restart = True  # Must restart to update files
                     old_dir = addon_path / '_old'
                     if not old_dir.exists():
                         os.mkdir(old_dir)
