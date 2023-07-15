@@ -90,10 +90,10 @@ class AnmExportTest(BlenderTestCase):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
         self.activate_object(body001_armature_object)
         
-        in_file = f'{self.resources_dir}/tpose.anm'
         in_file = f'{self.resources_dir}/dance_cm3d_001_f1.anm'
         in_file = f'{self.resources_dir}/dance_cm3d21_pole_001_fa_f1.anm'
         in_file = f'{self.resources_dir}/dance_cm3d2_001_zoukin.anm'
+        in_file = f'{self.resources_dir}/tpose.anm'
         out_file = f'{self.output_dir}/{self._testMethodName}.anm'
         
         
@@ -106,9 +106,6 @@ class AnmExportTest(BlenderTestCase):
         lineprof.enable()
         prof.enable()
         
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
         bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
         
         dump_test_stats(self._testMethodName, prof, lineprof)  
@@ -134,9 +131,6 @@ class AnmExportTest(BlenderTestCase):
         lineprof.enable()
         prof.enable()
         
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
         bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
         
         dump_test_stats(self._testMethodName, prof, lineprof)

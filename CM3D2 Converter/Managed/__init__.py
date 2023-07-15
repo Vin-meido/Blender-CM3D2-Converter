@@ -12,13 +12,15 @@ import pythonnet as _pythonnet
 _pythonnet.set_runtime('netfx')
 
 from pythonnet import unload
-from clr import *
-_sys.path.append(str(_MANAGED_DIR))
+
+if not _TYPE_CHECKING:
+    from clr import *
+    _sys.path.append(str(_MANAGED_DIR))
 
 if _TYPE_CHECKING:
     def AddReference(dll_name: str):
         """Reference the specified dll"""
         pass
-    
+
 AddReference('CM3D2.Serialization')
 AddReference('COM3D2.LiveLink')

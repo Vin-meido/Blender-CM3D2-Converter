@@ -62,9 +62,6 @@ if TYPE_CHECKING:
             pass
 
 
-
-active_livelink_core: LiveLinkCore = None
-
 @compat.BlRegister()
 class COM3D2LiveLinkSettings(bpy.types.PropertyGroup):
     send_animation_max_frames = bpy.props.IntProperty(name="Maximum Frames to Send", default=500, min=1, soft_max=10000)
@@ -73,17 +70,35 @@ class COM3D2LiveLinkSettings(bpy.types.PropertyGroup):
 @compat.BlRegister()
 class COM3D2LiveLinkState(bpy.types.PropertyGroup):
     is_link_pose = bpy.props.BoolProperty("Link Pose is Active", default=False, options={'SKIP_SAVE'})
-    
-    @staticmethod
-    def get_active_core() -> LiveLinkCore:
-        global active_livelink_core
-        return active_livelink_core
-    
-    @staticmethod
-    def set_active_core(value: LiveLinkCore):
-        global active_livelink_core
-        active_livelink_core = value
-    
+
+    #_active_livelink_core: LiveLinkCore = None
+
+    #@property
+    #def active_core(self) -> LiveLinkCore:
+    #    cls = self.__class__
+    #    return cls._active_livelink_core  # pylint:disable=protected-access
+
+    #@active_core.setter
+    #def active_core(self, value: LiveLinkCore):
+    #    cls = self.__class__
+    #    cls._active_livelink_core = value  # pylint:disable=protected-access
+
+
+if TYPE_CHECKING:
+    class WindowManager(bpy.types.WindowManager):
+        com3d2_livelink_settings: COM3D2LiveLinkSettings
+        com3d2_livelink_state: COM3D2LiveLinkState
+else:
+    from bpy.types import WindowManager
+
+
+def _get_active_core() -> LiveLinkCore:
+    return _set_active_core.core
+
+def _set_active_core(value: LiveLinkCore):
+    _set_active_core.core = value
+
+_set_active_core.core: LiveLinkCore = None
 
 
 @compat.BlRegister()
@@ -98,8 +113,8 @@ class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
         super().__init__()
     
     def draw(self, context):
-        wm = context.window_manager
-        core = COM3D2LiveLinkState.get_active_core()
+        wm: WindowManager = context.window_manager
+        core = _get_active_core()
         
         wm = context.window_manager
         
@@ -137,16 +152,20 @@ class COM3D2LIVELINK_OT_start_server(bpy.types.Operator):
     
     @classmethod
     def poll(cls, context):
-        return True
+        core = _get_active_core()
+        if not core:
+            return True
+        cls.poll_message_set("The LiveLink server is already running")
+        return not core.IsServer
 
     def execute(self, context):
-        core: LiveLinkCore = COM3D2LiveLinkState.get_active_core()
+        core = _get_active_core()
         
         if core and core.IsServer:
             core.Disconnect()
         elif core is None:
             core = LiveLinkCore()
-            COM3D2LiveLinkState.set_active_core(core)
+            _set_active_core(core)
         core.StartServer(self.address)
         
         if self.wait_for_connection:
@@ -158,20 +177,21 @@ class COM3D2LIVELINK_OT_start_server(bpy.types.Operator):
 @compat.BlRegister()
 class COM3D2LIVELINK_OT_stop_server(bpy.types.Operator):
     """Embed the data for vaporwave wireframe into the active UV slot"""
-    bl_idname = "com3d2livelink.stop_server"
+    bl_idname = 'com3d2livelink.stop_server'
     bl_label = "Stop LiveLink"
     
     @classmethod
     def poll(cls, context):
-        return False  # This currently crashes blender
-        global active_livelink_core
-        if active_livelink_core is None:
+        core = _get_active_core()
+        if core is None:
+            cls.poll_message_set("LiveLink core is not initialized.")
             return False
-        return active_livelink_core.IsConnected
+        cls.poll_message_set("LiveLink is not connected.")
+        return core.IsConnected
 
     def execute(self, context):
-        global active_livelink_core
-        active_livelink_core.Disconnect()
+        core = _get_active_core()
+        core.Disconnect()
         return {'FINISHED'}
 
 
@@ -183,15 +203,15 @@ class COM3D2LIVELINK_OT_wait_for_connection(bpy.types.Operator):
     
     @classmethod
     def poll(cls, context):
-        global active_livelink_core
-        if not active_livelink_core:
+        core = _get_active_core()
+        if not core:
             return False
         return True
 
     def execute(self, context):
-        global active_livelink_core
+        core = _get_active_core()
         
-        active_livelink_core.WaitForConnection()
+        core.WaitForConnection()
         
         return {'FINISHED'}
 
@@ -206,15 +226,15 @@ class COM3D2LIVELINK_OT_send_animation(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        global active_livelink_core
-        if not active_livelink_core or not active_livelink_core.IsConnected:
+        core = _get_active_core()
+        if not core or not core.IsConnected:
             return False
         
         obj = context.active_object
         return obj and obj.type == 'ARMATURE'
 
     def execute(self, context):
-        core: LiveLinkCore = COM3D2LiveLinkState.get_active_core()
+        core = _get_active_core()
         
         if bpy.ops.com3d2livelink.unlink_pose.poll():
             bpy.ops.com3d2livelink.unlink_pose()
@@ -251,15 +271,15 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
     
     @classmethod
     def poll(cls, context):
-        global active_livelink_core
-        if not active_livelink_core or not active_livelink_core.IsConnected:
+        core = _get_active_core()
+        if not core or not core.IsConnected:
             return False
         obj: bpy.types.Object = context.active_object
         return obj and obj.type == 'ARMATURE' and obj.mode == 'POSE'
         
     def modal(self, context, event):
         state: COM3D2LiveLinkState = context.window_manager.com3d2_livelink_state
-        core = state.get_active_core()
+        core = _get_active_core()
         
         
         if not self.poll(context):
@@ -285,7 +305,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def update_pose(self, context: bpy.types.Context):
-        global active_livelink_core
+        core = _get_active_core()
         
         builder = AnmBuilder()
         builder.no_set_frame        = True
@@ -299,8 +319,8 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
         serializer = CM3D2Serializer()
         memory_stream = MemoryStream()
         serializer.Serialize(memory_stream, anm)
-        active_livelink_core.SendBytes(memory_stream.GetBuffer(), memory_stream.Length)
-        active_livelink_core.Flush()
+        core.SendBytes(memory_stream.GetBuffer(), memory_stream.Length)
+        core.Flush()
     
     def cancel(self, context):
         wm: bpy.types.WindowManager = context.window_manager
@@ -321,7 +341,7 @@ class COM3D2LIVELINK_OT_unlink_pose(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         state = context.window_manager.com3d2_livelink_state
-        core: LiveLinkCore = COM3D2LiveLinkState.get_active_core()
+        core = _get_active_core()
         
         if core is None or not core.IsConnected:
             return False
