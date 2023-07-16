@@ -120,13 +120,19 @@ class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
         
         layout = self.layout
         
-        if core is None or not core.IsServer:
-            layout.operator(COM3D2LIVELINK_OT_start_server.bl_idname)
+        if core is None:
+            col = layout.column()
+            col.operator(COM3D2LIVELINK_OT_start_server.bl_idname)
+            col.label(text="")
         else:
-            layout.operator(COM3D2LIVELINK_OT_stop_server.bl_idname)
-        
+            col = layout.column()
+            col.operator_context = 'INVOKE_DEFAULT'
+            col.operator(COM3D2LIVELINK_OT_stop_server.bl_idname)
+            col.label(text="Connected" if (core is not None and core.IsConnected)
+                      else "Not connected")
+
         layout.separator()
-        
+
         if not wm.com3d2_livelink_state.is_link_pose:
             layout.operator(COM3D2LIVELINK_OT_link_pose.bl_idname)
         else:
@@ -148,7 +154,7 @@ class COM3D2LIVELINK_OT_start_server(bpy.types.Operator):
     bl_label = "Start LiveLink"
 
     address = bpy.props.StringProperty("Address", default='com3d2.livelink')
-    wait_for_connection = bpy.props.BoolProperty("Wait For Connection", default=True)
+    wait_for_connection = bpy.props.BoolProperty("Wait For Connection", default=False)
     
     @classmethod
     def poll(cls, context):
@@ -186,12 +192,26 @@ class COM3D2LIVELINK_OT_stop_server(bpy.types.Operator):
         if core is None:
             cls.poll_message_set("LiveLink core is not initialized.")
             return False
-        cls.poll_message_set("LiveLink is not connected.")
-        return core.IsConnected
+        return True
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=500)
+
+    def draw(self, context):
+        layout = self.layout
+        core = _get_active_core()
+        if core.IsConnected:
+            layout.label(text="⚠ WARNING ⚠")
+            layout.label(text="Stopping the server may crash Blender, the client, or both.")
+            layout.label(text="This action is only safe if the client is already disconnected.")
+            layout.label(text="Are you sure you want to try disconnecting?")
+        else:
+            layout.label(text="Shutdown LiveLink server?")
 
     def execute(self, context):
         core = _get_active_core()
         core.Disconnect()
+        _set_active_core(None)
         return {'FINISHED'}
 
 
