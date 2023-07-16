@@ -1,15 +1,21 @@
+from __future__ import annotations
 import re
 import struct
 import math
-import unicodedata
-import time
+import io
+from typing import Literal
 import bpy
-import bmesh
 import mathutils
 import os
 from . import common
 from . import compat
-from .translations.pgettext_functions import *
+from . fileutil import deserialize_from_file
+from . translations.pgettext_functions import *
+from . common import CM3D2ImportError
+
+from . import Managed
+from CM3D2.Serialization.Files import Anm
+from System import FormatException
 
 
 # メインオペレーター
@@ -28,7 +34,7 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
     set_frame_rate = bpy.props.BoolProperty(name="Set Framerate", default=True, description="Change the scene's render settings to 60 fps")                                     
     is_loop = bpy.props.BoolProperty(name="Loop", default=True)
 
-    is_anm_data_text = bpy.props.BoolProperty(name="Anm Text", default=True, description="Output Data to a JSON file")
+    is_anm_data_text = bpy.props.BoolProperty(name="Anm Text (SLOW)", default=False, description="Output Data to a JSON file")
     
     remove_pre_animation = bpy.props.BoolProperty(name="既にあるアニメーションを削除", default=True)
     set_frame = bpy.props.BoolProperty(name="フレーム開始・終了位置を調整", default=True)
@@ -37,7 +43,7 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
     is_location = bpy.props.BoolProperty(name="位置", default=True)
     is_rotation = bpy.props.BoolProperty(name="回転", default=True)
     is_scale = bpy.props.BoolProperty(name="拡縮", default=False)
-    is_tangents = bpy.props.BoolProperty(name="Tangents"      , default=False)
+    is_tangents = bpy.props.BoolProperty(name="Tangents", default=False)
 
     @classmethod
     def poll(cls, context):
@@ -84,55 +90,65 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
 
         try:
             file = open(self.filepath, 'rb')
-        except:
+        except IOError:
             self.report(type={'ERROR'}, message=f_tip_("ファイルを開くのに失敗しました、アクセス不可かファイルが存在しません。file={}", self.filepath))
             return {'CANCELLED'}
 
-        # ヘッダー
-        ext = common.read_str(file)
-        if ext != 'CM3D2_ANIM':
-            self.report(type={'ERROR'}, message="これはカスタムメイド3D2のモーションファイルではありません")
-            return {'CANCELLED'}
-        anm_version = struct.unpack('<i', file.read(4))[0]
-        first_channel_id = struct.unpack('<B', file.read(1))[0]
-        if first_channel_id != 1:
-            self.report(type={'ERROR'}, message=f_tip_("Unexpected first channel id = {id} (should be 1).", id=first_channel_id))
+        action_name = os.path.basename(self.filepath)
+        anm_importer = self.get_anm_importer()
+        try:
+            anm_importer.import_anm(context, file, action_name)
+        except CM3D2ImportError as ex:
+            self.report(type={'ERROR'}, message=ex.message)
             return {'CANCELLED'}
 
+        return {'FINISHED'}
 
-        anm_data = {}
-        for anim_data_index in range(9**9):
-            path = common.read_str(file)
-            
-            base_bone_name = path.split('/')[-1]
-            if base_bone_name not in anm_data:
-                anm_data[base_bone_name] = {'path': path}
-                anm_data[base_bone_name]['channels'] = {}
+    def get_anm_importer(self) -> AnmImporter:
+        anm_importer = AnmImporter(reporter=self)
 
-            for channel_index in range(9**9):
-                channel_id = struct.unpack('<B', file.read(1))[0]
-                channel_id_str = channel_id
-                if channel_id <= 1:
-                    break
-                anm_data[base_bone_name]['channels'][channel_id_str] = []
-                channel_data_count = struct.unpack('<i', file.read(4))[0]
-                for channel_data_index in range(channel_data_count):
-                    frame = struct.unpack('<f', file.read(4))[0]
-                    data = struct.unpack('<3f', file.read(4 * 3))
+        anm_importer.scale                   = self.scale
+        anm_importer.set_frame_rate          = self.set_frame_rate
+        anm_importer.is_loop                 = self.is_loop
+        anm_importer.is_anm_data_text        = self.is_anm_data_text
+        anm_importer.remove_pre_animation    = self.remove_pre_animation
+        anm_importer.set_frame               = self.set_frame
+        anm_importer.ignore_automatic_bone   = self.ignore_automatic_bone
+        anm_importer.is_location             = self.is_location
+        anm_importer.is_rotation             = self.is_rotation
+        anm_importer.is_scale                = self.is_scale
+        anm_importer.is_tangents             = self.is_tangents
 
-                    anm_data[base_bone_name]['channels'][channel_id_str].append({'frame': frame, 'f0': data[0], 'f1': data[1], 'f2': data[2]})
+        return anm_importer
 
-            if channel_id == 0:
-                break
-        
+
+class AnmImporter:
+    def __init__(self, reporter: bpy.types.Operator):
+        self.reporter = reporter
+
+        self.scale                   = 5
+        self.set_frame_rate          = True
+        self.is_loop                 = True
+        self.is_anm_data_text        = False
+        self.remove_pre_animation    = True
+        self.set_frame               = True
+        self.ignore_automatic_bone   = True
+        self.is_location             = True
+        self.is_rotation             = True
+        self.is_scale                = False
+        self.is_tangents             = False
+
+        self._keyframe_queue: dict[bpy.types.FCurve, list[tuple[tuple[float, float], str]]] = {}
+    
+    
+    def import_anm(self, context: bpy.types.Context, file: io.BufferedReader, acion_name: str):
+                # ヘッダー
+
+        anm_data = self.read_anm_data(file)
+
+
         if self.is_anm_data_text:
-            if "AnmData" in context.blend_data.texts:
-                txt = context.blend_data.texts["AnmData"]
-                txt.clear()
-            else:
-                txt = context.blend_data.texts.new("AnmData")
-            import json
-            txt.write( json.dumps(anm_data, ensure_ascii=False, indent=2) )
+            self.import_anm_data_to_text(context, anm_data)
 
         if self.set_frame_rate:
             context.scene.render.fps = 60
@@ -150,11 +166,11 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
             anim = ob.animation_data_create()
         action = anim.action
         if not action:
-            action = context.blend_data.actions.new(os.path.basename(self.filepath))
+            action = context.blend_data.actions.new(acion_name)
             anim.action = action
             fcurves = action.fcurves
         else:
-            action.name = os.path.basename(self.filepath)
+            action.name = os.path.basename(acion_name)
             fcurves = action.fcurves
             if self.remove_pre_animation:
                 for fcurve in fcurves:
@@ -164,6 +180,9 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
         bpy.ops.object.mode_set(mode='OBJECT')
         found_unknown = []
         found_tangents = []
+        
+        self._keyframe_queue = {}
+        
         for bone_name, bone_data in anm_data.items():
             if self.ignore_automatic_bone:
                 if re.match(r"Kata_[RL]", bone_name):
@@ -182,78 +201,9 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
 
             loc_fcurves  = None
 
-            locs = {}
-            loc_tangents = {}
-            quats = {}
-            quat_tangents = {}
-            for channel_id, channel_data in bone_data['channels'].items():
-
-                if channel_id in [100, 101, 102, 103]:
-                    for data in channel_data:
-                        frame = data['frame']
-                        if frame not in quats:
-                            quats[frame] = [None, None, None, None]
-
-                        if channel_id == 103:
-                            quats[frame][0] = data['f0']
-                        elif channel_id == 100:
-                            quats[frame][1] = data['f0']
-                        elif channel_id == 101:
-                            quats[frame][2] = data['f0']
-                        elif channel_id == 102:
-                            quats[frame][3] = data['f0']
-
-                        #tangents = (data['f1'], data['f2'])
-                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.01:
-                        #    found_tangents.append(tangents)
-                        if frame not in quat_tangents:
-                            quat_tangents[frame] = {'in': [None, None, None, None], 'out': [None, None, None, None]}
-
-                        if channel_id == 103:
-                            quat_tangents[frame]['in' ][0] = data['f1']
-                            quat_tangents[frame]['out'][0] = data['f2']
-                        elif channel_id == 100:                        
-                            quat_tangents[frame]['in' ][1] = data['f1']
-                            quat_tangents[frame]['out'][1] = data['f2']
-                        elif channel_id == 101:                        
-                            quat_tangents[frame]['in' ][2] = data['f1']
-                            quat_tangents[frame]['out'][2] = data['f2']
-                        elif channel_id == 102:              
-                            quat_tangents[frame]['in' ][3] = data['f1']
-                            quat_tangents[frame]['out'][3] = data['f2']
-
-                elif channel_id in [104, 105, 106]:
-                    for data in channel_data:
-                        frame = data['frame']
-                        if frame not in locs:
-                            locs[frame] = [None, None, None]
-
-                        if channel_id == 104:
-                            locs[frame][0] = data['f0']
-                        elif channel_id == 105:
-                            locs[frame][1] = data['f0']
-                        elif channel_id == 106:
-                            locs[frame][2] = data['f0']
-                        
-                        #tangents = (data['f1'], data['f2'])
-                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.05:
-                        #    found_tangents.append(tangents)
-                        if frame not in loc_tangents:
-                            loc_tangents[frame] = {'in': [None, None, None], 'out': [None, None, None]}
-
-                        if channel_id == 104:
-                            loc_tangents[frame]['in' ][0] = data['f1']
-                            loc_tangents[frame]['out'][0] = data['f2']
-                        elif channel_id == 105:                       
-                            loc_tangents[frame]['in' ][1] = data['f1']
-                            loc_tangents[frame]['out'][1] = data['f2']
-                        elif channel_id == 106:                       
-                            loc_tangents[frame]['in' ][2] = data['f1']
-                            loc_tangents[frame]['out'][2] = data['f2']
-
-                elif channel_id not in found_unknown:
-                    found_unknown.append(channel_id)
-                    self.report(type={'INFO'}, message=f_tip_("Unknown channel id {num}", num=channel_id))
+            locs, loc_tangents, quats, quat_tangents, bone_found_unknown = \
+                    self.get_bone_keyframe_data(found_unknown, bone_data)
+            found_unknown.extend(bone_found_unknown)
 
             '''
             for frame, (loc, quat) in enumerate(zip(locs.values(), quats.values())):
@@ -343,10 +293,10 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
                         if not dist_in and not dist_out:
                             dist_in  = this_keyframe.handle_left[0]  - this_co.x
                             dist_out = this_keyframe.handle_right[0] - this_co.x
-                        elif not dist_in:
-                            dist_in  = -dist_out
-                        elif not dist_out:
-                            dist_out = -dist_in
+                        #elif not dist_in:
+                        #    dist_in  = -dist_out
+                        #elif not dist_out:
+                        #    dist_out = -dist_in
 
                         this_keyframe.handle_left  = vec_in  * dist_in  + this_co
                         this_keyframe.handle_right = vec_out * dist_out + this_co
@@ -395,17 +345,18 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
                         loc = compat.convert_cm_to_bl_space(loc)
                     return compat.mul(bone.matrix_local.inverted(), loc)
 
-                for frame, loc in locs.items():
+                for time, loc in locs.items():
                     result_loc = _convert_loc(loc)
                     #pose_bone.location = result_loc
 
                     #pose_bone.keyframe_insert('location', frame=frame * fps, group=pose_bone.name)
-                    if max_frame < frame * fps:
-                        max_frame = frame * fps
+                    if max_frame < time * fps:
+                        max_frame = time * fps
      
                     for fcurve in loc_fcurves:
+                        fcurve: bpy.types.FCurve
                         keyframe_type = 'KEYFRAME'
-                        tangents = loc_tangents[frame]
+                        tangents = loc_tangents[time]
                         if tangents:
                             tangents = mathutils.Vector((tangents['in'][fcurve.array_index], tangents['out'][fcurve.array_index]))
                             if tangents.magnitude < 1e-6:
@@ -413,21 +364,17 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
                             elif tangents.magnitude > 0.1:
                                 keyframe_type = 'EXTREME'
 
-                        keyframe = fcurve.keyframe_points.insert(
-                            frame         = frame * fps                   , 
-                            value         = result_loc[fcurve.array_index], 
-                            options       = {'FAST'}                      , 
-                            keyframe_type = keyframe_type
-                        )
-                        keyframe.type = keyframe_type
-                        loc_keyframes[fcurve.array_index].append(frame)
+                        self._queue_append_keyframe(fcurve, time * fps, result_loc[fcurve.array_index], keyframe_type)                        
+                        loc_keyframes[fcurve.array_index].append(time)
 
+                self._create_keyframes_in_queue()
+                
                 if self.is_loop:
                     for fcurve in loc_fcurves:
                         new_modifier = fcurve.modifiers.new('CYCLES')
 
                 if self.is_tangents:
-                    for frame, tangents in loc_tangents.items():
+                    for time, tangents in loc_tangents.items():
                         tangent_in  = mathutils.Vector(tangents['in' ]) * self.scale
                         tangent_out = mathutils.Vector(tangents['out']) * self.scale
                         if bone.parent:
@@ -440,6 +387,7 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
                         tangents['out'][:] = tangent_out[:]
 
                     _apply_tangents(loc_fcurves, loc_keyframes, loc_tangents)
+                
                         
             
             
@@ -472,39 +420,36 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
                     #quat.make_compatible(orig_quat)
                     return quat
                         
-                for frame, quat in quats.items():
+                for time, quat in quats.items():
                     result_quat = _convert_quat(quat)
                     #pose_bone.rotation_quaternion = result_quat.copy()
             
                     #pose_bone.keyframe_insert('rotation_quaternion', frame=frame * fps, group=pose_bone.name)
-                    if max_frame < frame * fps:
-                        max_frame = frame * fps
+                    if max_frame < time * fps:
+                        max_frame = time * fps
                     
                     for fcurve in quat_fcurves:
+                        fcurve: bpy.types.FCurve
                         keyframe_type = 'KEYFRAME'
-                        tangents = quat_tangents[frame]
+                        tangents = quat_tangents[time]
                         if tangents:
                             tangents = mathutils.Vector((tangents['in'][fcurve.array_index], tangents['out'][fcurve.array_index]))
                             if tangents.magnitude < 1e-6:
                                 keyframe_type = 'JITTER'
                             elif tangents.magnitude > 0.1:
                                 keyframe_type = 'EXTREME'
-                        
-                        keyframe = fcurve.keyframe_points.insert(
-                            frame         = frame * fps                     , 
-                            value         = result_quat[fcurve.array_index] , 
-                            options       = {'FAST'}                        , 
-                            keyframe_type = keyframe_type
-                        )
-                        keyframe.type = keyframe_type
-                        quat_keyframes[fcurve.array_index].append(frame)
 
+                        self._queue_append_keyframe(fcurve, time * fps, result_quat[fcurve.array_index], keyframe_type)
+                        quat_keyframes[fcurve.array_index].append(time)
+
+                self._create_keyframes_in_queue()
+                
                 if self.is_loop:
                     for fcurve in quat_fcurves:
                         new_modifier = fcurve.modifiers.new('CYCLES')
                 
                 if self.is_tangents:
-                    for frame, tangents in quat_tangents.items():
+                    for time, tangents in quat_tangents.items():
                         tangents['in' ][:] = _convert_quat(tangents['in' ])[:]
                         tangents['out'][:] = _convert_quat(tangents['out'])[:]
 
@@ -513,24 +458,204 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
 
 
         if found_tangents:
-            self.report(type={'INFO'}, message="Found the following tangent values:")
+            self.reporter.report(type={'INFO'}, message="Found the following tangent values:")
             for f1, f2 in found_tangents:
-                self.report(type={'INFO'}, message=f_tip_("f1 = {float1}, f2 = {float2}", float1=f1, float2=f2))
-            self.report(type={'INFO'}, message="Found the above tangent values.")  
-            self.report(type={'WARNING'}, message=f_tip_("Found {count} large tangents. Blender animation may not interpolate properly. See log for more info.", count=len(found_tangents)))  
+                self.reporter.report(type={'INFO'}, message=f_tip_("f1 = {float1}, f2 = {float2}", float1=f1, float2=f2))
+            self.reporter.report(type={'INFO'}, message="Found the above tangent values.")  
+            self.reporter.report(type={'WARNING'}, message=f_tip_("Found {count} large tangents. Blender animation may not interpolate properly. See log for more info.", count=len(found_tangents)))  
         if found_unknown:
-            self.report(type={'INFO'}, message="Found the following unknown channel IDs:")
+            self.reporter.report(type={'INFO'}, message="Found the following unknown channel IDs:")
             for channel_id in found_unknown:
-                self.report(type={'INFO'}, message=f_tip_("id = {id}", id=channel_id))
-            self.report(type={'INFO'}, message="Found the above unknown channel IDs.")  
-            self.report(type={'WARNING'}, message=f_tip_("Found {count} unknown channel IDs. Blender animation may be missing some keyframes. See log for more info.", count=len(found_unknown)))
+                self.reporter.report(type={'INFO'}, message=f_tip_("id = {id}", id=channel_id))
+            self.reporter.report(type={'INFO'}, message="Found the above unknown channel IDs.")  
+            self.reporter.report(type={'WARNING'}, message=f_tip_("Found {count} unknown channel IDs. Blender animation may be missing some keyframes. See log for more info.", count=len(found_unknown)))
 
         if self.set_frame:
             context.scene.frame_start = 0
-            context.scene.frame_end = max_frame
+            context.scene.frame_end = math.ceil(max_frame)
             context.scene.frame_set(0)
 
-        return {'FINISHED'}
+    def get_bone_keyframe_data(self, found_unknown, bone_data):
+        locs = {}
+        loc_tangents = {}
+        quats = {}
+        quat_tangents = {}
+        found_unknown = []
+        
+        for channel_id, channel_data in bone_data['channels'].items():
+            if channel_id in [100, 101, 102, 103]:
+                for data in channel_data:
+                    frame = data['frame']
+                    if frame not in quats:
+                        quats[frame] = [None, None, None, None]
+
+                    if channel_id == 103:
+                        quats[frame][0] = data['f0']
+                    elif channel_id == 100:
+                        quats[frame][1] = data['f0']
+                    elif channel_id == 101:
+                        quats[frame][2] = data['f0']
+                    elif channel_id == 102:
+                        quats[frame][3] = data['f0']
+
+                        #tangents = (data['f1'], data['f2'])
+                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.01:
+                        #    found_tangents.append(tangents)
+                    if frame not in quat_tangents:
+                        quat_tangents[frame] = {'in': [None, None, None, None], 'out': [None, None, None, None]}
+
+                    if channel_id == 103:
+                        quat_tangents[frame]['in' ][0] = data['f1']
+                        quat_tangents[frame]['out'][0] = data['f2']
+                    elif channel_id == 100:                        
+                        quat_tangents[frame]['in' ][1] = data['f1']
+                        quat_tangents[frame]['out'][1] = data['f2']
+                    elif channel_id == 101:                        
+                        quat_tangents[frame]['in' ][2] = data['f1']
+                        quat_tangents[frame]['out'][2] = data['f2']
+                    elif channel_id == 102:              
+                        quat_tangents[frame]['in' ][3] = data['f1']
+                        quat_tangents[frame]['out'][3] = data['f2']
+
+            elif channel_id in [104, 105, 106]:
+                for data in channel_data:
+                    frame = data['frame']
+                    if frame not in locs:
+                        locs[frame] = [None, None, None]
+
+                    if channel_id == 104:
+                        locs[frame][0] = data['f0']
+                    elif channel_id == 105:
+                        locs[frame][1] = data['f0']
+                    elif channel_id == 106:
+                        locs[frame][2] = data['f0']
+                        
+                        #tangents = (data['f1'], data['f2'])
+                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.05:
+                        #    found_tangents.append(tangents)
+                    if frame not in loc_tangents:
+                        loc_tangents[frame] = {'in': [None, None, None], 'out': [None, None, None]}
+
+                    if channel_id == 104:
+                        loc_tangents[frame]['in' ][0] = data['f1']
+                        loc_tangents[frame]['out'][0] = data['f2']
+                    elif channel_id == 105:                       
+                        loc_tangents[frame]['in' ][1] = data['f1']
+                        loc_tangents[frame]['out'][1] = data['f2']
+                    elif channel_id == 106:                       
+                        loc_tangents[frame]['in' ][2] = data['f1']
+                        loc_tangents[frame]['out'][2] = data['f2']
+
+            elif channel_id not in found_unknown:
+                found_unknown.append(channel_id)
+                self.reporter.report(type={'INFO'}, message=f_tip_("Unknown channel id {num}", num=channel_id))
+                
+        return locs, loc_tangents, quats, quat_tangents, found_unknown
+
+    def import_anm_data_to_text(self, context, anm_data):
+        if "AnmData" in context.blend_data.texts:
+            txt = context.blend_data.texts["AnmData"]
+            txt.clear()
+        else:
+            txt = context.blend_data.texts.new("AnmData")
+            
+        import json
+        # XXX : CAUTION : XXX : This is EXTREMELY SLOW!!!
+        txt.write( json.dumps(anm_data, ensure_ascii=False, indent=2) )
+
+    def read_anm_data_OLD(self, file):
+        ext = common.read_str(file)
+        if ext != 'CM3D2_ANIM':
+            raise CM3D2ImportError("これはカスタムメイド3D2のモーションファイルではありません")
+        anm_version = struct.unpack('<i', file.read(4))[0]
+        first_channel_id = struct.unpack('<B', file.read(1))[0]
+        if first_channel_id != 1:
+            raise CM3D2ImportError(f_tip_("Unexpected first channel id = {id} (should be 1).", id=first_channel_id))
+
+        
+        anm_data = {}
+        for anim_data_index in range(9**9):
+            path = common.read_str(file)
+            
+            base_bone_name = path.split('/')[-1]
+            if base_bone_name not in anm_data:
+                anm_data[base_bone_name] = {'path': path}
+                anm_data[base_bone_name]['channels'] = {}
+
+            for channel_index in range(9**9):
+                channel_id = struct.unpack('<B', file.read(1))[0]
+                channel_id_str = channel_id
+                if channel_id <= 1:
+                    break
+                anm_data[base_bone_name]['channels'][channel_id_str] = []
+                channel_data_count = struct.unpack('<i', file.read(4))[0]
+                for channel_data_index in range(channel_data_count):
+                    frame = struct.unpack('<f', file.read(4))[0]
+                    data = struct.unpack('<3f', file.read(4 * 3))
+
+                    anm_data[base_bone_name]['channels'][channel_id_str].append({'frame': frame, 'f0': data[0], 'f1': data[1], 'f2': data[2]})
+
+            if channel_id == 0:
+                break
+        return anm_data
+
+    def read_anm_data(self, file):
+        anm_data = {}
+        
+        try:
+            anm = deserialize_from_file(Anm, file)
+        except FormatException as ex:
+            raise CM3D2ImportError(ex.Message) from ex
+        
+        ext = anm.signature
+        anm_version = anm.version
+
+        for track in anm.tracks:
+            path = track.path
+
+            base_bone_name = path.split('/')[-1]
+            if base_bone_name not in anm_data:
+                anm_data[base_bone_name] = {'path': path}
+                anm_data[base_bone_name]['channels'] = {}
+
+            for channel in track.channels:
+                channel_id = channel.channelId
+                channel_id_str = channel_id
+                anm_data[base_bone_name]['channels'][channel_id_str] = []
+                for keyframe in channel.keyframes:
+                    keyframe: Anm.Track.Channel.Keyframe
+                    anm_data[base_bone_name]['channels'][channel_id_str].append({
+                        'frame': keyframe.time,
+                        'f0': keyframe.value,
+                        'f1': keyframe.tanIn,
+                        'f2': keyframe.tanOut
+                    })
+
+        return anm_data
+
+    def _queue_append_keyframe(self, fcurve: bpy.types.FCurve, frame: float, value: float, 
+                         keyframe_type: Literal['KEYFRAME', 'BREAKDOWN', 'MOVING_HOLD', 'EXTREME', 'JITTER']):
+        # This is slow
+        #keyframe = fcurve.keyframe_points.insert(
+        #    frame         = frame * fps                     , 
+        #    value         = result_quat[fcurve.array_index] , 
+        #    options       = {'FAST'}                        , 
+        #    keyframe_type = keyframe_type
+        #)
+        
+        # This is faster
+        if fcurve not in self._keyframe_queue.keys():
+            self._keyframe_queue[fcurve] = []
+        self._keyframe_queue[fcurve].append(((frame, value), keyframe_type))
+        
+    def _create_keyframes_in_queue(self):
+        for fcurve, keyframe_data in self._keyframe_queue.items():
+            fcurve.keyframe_points.add(len(keyframe_data))
+            for keyframe, data in zip(fcurve.keyframe_points, keyframe_data):
+                keyframe.co   = data[0]
+                keyframe.type = data[1]
+        self._keyframe_queue.clear()
+            
 
 
 # メニューに登録する関数

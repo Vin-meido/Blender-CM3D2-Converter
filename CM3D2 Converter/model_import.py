@@ -339,7 +339,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 print("".join(msg))
                 return {'CANCELLED'}
 
-            except common.CM3D2ImportException as e:
+            except common.CM3D2ImportError as e:
                 msg = [
                     f_tip_("Error reading file at byte 0x{num:02X}", num=reader.tell()) + "\n",
                     str(e) + "\n",

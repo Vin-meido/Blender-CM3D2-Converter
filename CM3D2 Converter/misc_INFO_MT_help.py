@@ -10,9 +10,16 @@ import xml.sax.saxutils
 import addon_utils
 import bpy
 import traceback
+import shutil
+import hashlib
+import random
+from pathlib import Path
+
 from . import common
 from . import compat
 from .translations.pgettext_functions import *
+
+from . import Managed
 
 
 # メニュー等に項目追加
@@ -20,8 +27,9 @@ def menu_func(self, context):
     icon_id = common.kiss_icon()
     self.layout.separator()
     self.layout.operator('script.update_cm3d2_converter', icon_value=icon_id)
-    self.layout.operator('wm.call_menu', icon_value=icon_id, text="CM3D2 Converterの更新履歴").name = 'INFO_MT_help_CM3D2_Converter_RSS'
+    self.layout.operator('wm.call_menu', icon_value=icon_id, text=INFO_MT_help_CM3D2_Converter_RSS.bl_label).name = INFO_MT_help_CM3D2_Converter_RSS.bl_idname
     self.layout.operator('wm.show_cm3d2_converter_preference', icon_value=icon_id)
+    # self.layout.operator('wm.call_menu', icon_value=icon_id, text=INFO_MT_help_cm3d2_converter_reload_notice.bl_label).name = INFO_MT_help_cm3d2_converter_reload_notice.bl_idname
 
 
 # 更新履歴メニュー
@@ -162,35 +170,55 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
         branch = self.branch
         if branch == 'current':
             branch = common.BRANCH
-        zip_path = os.path.join(bpy.app.tempdir, f"Blender-CM3D2-Converter-{branch}.zip")
-        addon_path = os.path.dirname(__file__)
+        zip_path = Path(bpy.app.tempdir) / f"Blender-CM3D2-Converter-{branch}.zip"
+        addon_path = Path(__file__).parent
 
         response = urllib.request.urlopen(common.URL_MODULE.format(branch=branch))
         zip_file = open(zip_path, 'wb')
         zip_file.write(response.read())
         zip_file.close()
 
+        Managed.unload()
+        
         zip_file = zipfile.ZipFile(zip_path, 'r')
         sub_dir = ""
         for path in zip_file.namelist():
-            if not sub_dir and os.path.split(os.path.split(path)[0])[1] == "CM3D2 Converter":
+            if not sub_dir and os.path.split(os.path.split(path)[0])[1] in ("CM3D2 Converter", "CM3D2_Converter"):
                 sub_dir = path
                 continue
             if not sub_dir or sub_dir not in path:
                 continue
-            relative_path = os.path.relpath(path, start=sub_dir)
-            real_path = os.path.join(addon_path, relative_path)
+            relative_path = Path(path).relative_to(sub_dir)
+            real_path = addon_path / relative_path
+            
             # If it is a file
             if os.path.basename(path): # is a file
-                file = open(real_path, 'wb') # open() will automatically create it if it does not exist
-                file.write(zip_file.read(path))
-                file.close()
+                file = None
+                try:
+                    file = open(str(real_path), 'wb') # open() will automatically create it if it does not exist
+                except:
+                    file = None
+                    # Check if the file needs to be updated first
+                    with open(str(real_path), 'rb') as old_file:
+                        old_hash = hashlib.md5(old_file.read()    ).hexdigest()
+                        new_hash = hashlib.md5(zip_file.read(path)).hexdigest()
+                    if old_hash != new_hash:
+                        # self.is_restart = True
+                        old_dir = addon_path / '_old'
+                        if not old_dir.exists():
+                            os.mkdir(old_dir)
+                        move_path = old_dir / f'~{random.randint(0, 999999)}.{real_path.name}'
+                        shutil.move(real_path, move_path)
+                        file = open(str(real_path), 'wb')
+                if file is not None:
+                    file.write(zip_file.read(path))
+                    file.close()
+                    
             # If it is a missing directory
-            elif not os.path.exists(real_path):
+            elif not real_path.exists():
                 os.mkdir(real_path)
 
         zip_file.close()
-        return {'CANCELLED'}
 
         if self.is_restart:
             filepath = bpy.data.filepath
@@ -208,8 +236,9 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
             if compat.IS_LEGACY:
                 self.report(type={'INFO'}, message="Blender-CM3D2-Converterを更新しました、再起動して下さい")
             else:
-                bpy.ops.scripts.reload()
-                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated")
+                bpy.ops.preferences.addon_refresh()
+                bpy.ops.wm.call_menu(name=INFO_MT_help_cm3d2_converter_reload_notice.bl_idname)
+                self.report(type={'INFO'}, message="Blender-CM3D2-Converter updated successfully. Reload scripts to apply changes.")
         return {'FINISHED'}
 
 
@@ -227,6 +256,7 @@ class CNV_OT_show_cm3d2_converter_preference(bpy.types.Operator):
             if info['name'] == common.ADDON_NAME:
                 my_info = info
                 break
+        bpy.ops.screen.userpref_show()
         area = common.get_request_area(context, compat.pref_type())
         if area and my_info:
             compat.get_prefs(context).active_section = 'ADDONS'
@@ -243,3 +273,16 @@ class CNV_OT_show_cm3d2_converter_preference(bpy.types.Operator):
             self.report(type={'ERROR'}, message="表示できるエリアが見つかりませんでした")
             return {'CANCELLED'}
         return {'FINISHED'}
+
+
+@compat.BlRegister()
+class INFO_MT_help_cm3d2_converter_reload_notice(bpy.types.Menu):
+    bl_idname = 'INFO_MT_help_cm3d2_converter_reload_notice'
+    bl_label = "CM3D2 Converter Reload Notice"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Scripts must be reloaded to apply changes.")
+        layout.label(text="Top Bar > Blender Logo > System > Reload Scripts")
+        # layout.separator()
+        # layout.operator('wm.call_menu', text="Show me").name = 'TOPBAR_MT_blender_system'

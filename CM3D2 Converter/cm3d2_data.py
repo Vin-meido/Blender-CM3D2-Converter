@@ -480,7 +480,7 @@ class Material():
         if read_header:
             header = common.read_str(reader)
             if header != 'CM3D2_MATERIAL':
-                raise common.CM3D2ImportException(f_tip_("mateファイルではありません。ヘッダ:{}", header))
+                raise common.CM3D2ImportError(f_tip_("mateファイルではありません。ヘッダ:{}", header))
             self.version = struct.unpack('<i', reader.read(4))[0]
             self.name1 = common.read_str(reader)
         self.name2 = common.read_str(reader)
@@ -536,7 +536,7 @@ class Material():
             elif prop_type == 'end':
                 break
             else:
-                raise common.CM3D2ImportException(f_tip_("Materialプロパティに未知の設定値タイプ({prop})が見つかりました。", prop=prop_type))
+                raise common.CM3D2ImportError(f_tip_("Materialプロパティに未知の設定値タイプ({prop})が見つかりました。", prop=prop_type))
 
     def write(self, writer, write_header=True):
         if write_header:
@@ -640,7 +640,7 @@ class MaterialHandler:
         try:
             img = node.image
         except:
-            raise common.CM3D2ImportException('Materialプロパティのtexタイプの設定値取得に失敗しました。')
+            raise common.CM3D2ImportError('Materialプロパティのtexタイプの設定値取得に失敗しました。')
 
         if img:
             tex_name = common.remove_serial_number(img.name, remove_serial)

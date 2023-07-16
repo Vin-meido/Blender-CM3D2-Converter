@@ -75,7 +75,7 @@ class CNV_OT_export_cm3d2_mate(bpy.types.Operator):
 
                 mat_data.write(writer)
 
-        except common.CM3D2ExportException as e:
+        except common.CM3D2ExportError as e:
             self.report(type={'ERROR'}, message=str(e))
             return {'CANCELLED'}
 

@@ -3,6 +3,7 @@ import re
 import math
 import struct
 import shutil
+from typing import Any
 import bpy
 import bmesh
 import mathutils
@@ -37,7 +38,26 @@ re_bone2 = re.compile(r"([_ ])([rRlL])([_ ].*)$")
 def preferences():
     global PREFS
     if PREFS is None:
-        PREFS = compat.get_prefs(bpy.context).addons[__package__].preferences
+        try:
+            PREFS = compat.get_prefs(bpy.context).addons[__package__].preferences
+        except KeyError:
+            # This can happen when using Blender-as-a-Module
+            # which is how the unit-tests work
+            from . import AddonPreferences
+            _props = {}
+            for k, v in AddonPreferences.__dict__.items():
+                if str(type(v)) == '<class \'_PropertyDeferred\'>':
+                    kw: dict = v.keywords
+                    default = kw['default'] if 'default' in kw.keys() else None
+                    _props[k] = default
+            class FakeAddonPreferences:
+                def __getattribute__(self, name: str) -> Any:
+                    return _props[name]
+                def __setattr__(self, name: str, value: Any) -> None:
+                    if name not in _props.keys():
+                        raise AttributeError(self, name)
+                    _props[name] = value
+            PREFS = FakeAddonPreferences()
     return PREFS
 
 
@@ -67,7 +87,7 @@ def line_trim(line, enable=True):
 def write_str(file, raw_str):
     b_str = format(len(raw_str.encode('utf-8')), 'b')
     for i in range(9):
-        if 7 < len(b_str):
+        if len(b_str) > 7:
             file.write(struct.pack('<B', int("1" + b_str[-7:], 2)))
             b_str = b_str[:-7]
         else:
@@ -1023,11 +1043,15 @@ def trigonometric_smooth(x):
 
 
 # エクスポート例外クラス
-class CM3D2ExportException(Exception):
-    pass
+class CM3D2ExportError(Exception):
+    def __init__(self, message, *args):
+        super().__init__(message, *args)
+        self.message = message
 
-class CM3D2ImportException(Exception):
-    pass
+class CM3D2ImportError(Exception):
+    def __init__(self, message, *args):
+        super().__init__(message, *args)
+        self.message = message
 
 
 # ノード取得クラス
