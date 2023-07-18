@@ -11,7 +11,7 @@ on:
 
 # security: restrict permissions for CI jobs.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   # Add a release, and include a zip file
