@@ -28,5 +28,6 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             DRAFT_RELEASE: true
             CHANGELOG_FILE: none
+            TAG_PREFIX_REGEX: luv.
           with:
             args: Blender-CM3D2-Converter.zip
