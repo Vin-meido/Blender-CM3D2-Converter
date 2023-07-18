@@ -6,7 +6,7 @@ import sys as _sys
 from pathlib import Path as _Path
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
-_MANAGED_DIR = _Path(__file__).parent
+_MANAGED_DIR = _Path(__file__).parent.absolute()
 
 import pythonnet as _pythonnet
 _pythonnet.set_runtime('netfx')
