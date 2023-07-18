@@ -33,6 +33,11 @@ jobs:
       - name: Create Zip
         run: |
           zip -r ${{env.ZIP_FILE}} "CM3D2 Converter"
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ZIP_FILE }}
+          path: ${{ env.ZIP_FILE }}
       - name: Draft Tagged Release
         if: ${{ github.ref_type == 'tag' }}
         uses: docker://antonyurchenko/git-release:v5
