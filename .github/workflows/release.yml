@@ -5,8 +5,8 @@ on:
   push:
     branches:
       - bl_28
-    #tags:
-    #  - "v[0-9]+.[0-9]+.[0-9]+"
+    tags:
+      - "luv.[0-9]+.[0-9]+.[0-9]+*"
 
 
 # security: restrict permissions for CI jobs.
@@ -14,20 +14,33 @@ permissions:
   contents: read
 
 jobs:
-    # Add a release, and include a zip file
-    release:
-      name: Release
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v3
-        - name: Create Zip
-          run: |
-            zip -r Blender-CM3D2-Converter.zip "CM3D2 Converter"
-        - uses: docker://antonyurchenko/git-release:v5
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            DRAFT_RELEASE: true
-            CHANGELOG_FILE: none
-            TAG_PREFIX_REGEX: luv.
-          with:
-            args: Blender-CM3D2-Converter.zip
+  # Add a release, and include a zip file
+  latest-release:
+    name: Latest Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Create Zip
+        run: |
+          zip -r Blender-CM3D2-Converter.zip "CM3D2 Converter"
+      - name: Draft Tagged Release
+        if: ${{ github.ref_type != 'tag' }}
+        uses: docker://antonyurchenko/git-release:v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRAFT_RELEASE: true
+          CHANGELOG_FILE: none
+          TAG_PREFIX_REGEX: luv.
+        with:
+          args: Blender-CM3D2-Converter.zip
+      - name: Draft Untagged Release
+        if: ${{ github.ref_type != 'branch' }}
+        uses: docker://antonyurchenko/git-release:v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRAFT_RELEASE: true
+          CHANGELOG_FILE: none
+          UNRELEASED: "update"
+        with:
+          args: Blender-CM3D2-Converter.zip
+            
