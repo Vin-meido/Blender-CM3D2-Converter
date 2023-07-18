@@ -24,7 +24,7 @@ jobs:
         run: |
           zip -r Blender-CM3D2-Converter.zip "CM3D2 Converter"
       - name: Draft Tagged Release
-        if: ${{ github.ref_type != 'tag' }}
+        if: ${{ github.ref_type == 'tag' }}
         uses: docker://antonyurchenko/git-release:v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
         with:
           args: Blender-CM3D2-Converter.zip
       - name: Draft Untagged Release
-        if: ${{ github.ref_type != 'branch' }}
+        if: ${{ github.ref_type == 'branch' }}
         uses: docker://antonyurchenko/git-release:v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
