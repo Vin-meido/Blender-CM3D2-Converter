@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2023, 7, "16a"),
+    "version": ("luv", 2023, 7, "pre-16b2"),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -26,7 +26,6 @@ def install_dependencies():
     if not package_helper.check_module('pythonnet'):
         print("Installing dependency 'pythonnet'...")
         package_helper.install_package('pythonnet==3.0.1')
-        bpy.ops.script.reload()
         raise "Dependencies installed. Restart is required."
     else:
         print("Package 'pythonnet' is installed")
