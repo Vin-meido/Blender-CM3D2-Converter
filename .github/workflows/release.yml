@@ -20,9 +20,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Determine Tagged Zip Name
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          VERSION_SUFFIX=$(echo ${{github.ref_name}} | awk '{gsub("\\.","-")}1')
+          export ZIP_FILE="Blender-CM3D2-Converter-bl_28.$VERSION_SUFFIX.zip"
+      - name: Determine Untagged Zip Name
+        if: ${{ github.ref_type == 'branch' }}
+        run: |
+          VERSION_SUFFIX=$(echo ${{github.sha}} | cut -c 1-7)
+          export ZIP_FILE="Blender-CM3D2-Converter-bl_28.${{github.sha}}.zip"
       - name: Create Zip
         run: |
-          zip -r Blender-CM3D2-Converter.zip "CM3D2 Converter"
+          zip -r $ZIP_FILE "CM3D2 Converter"
       - name: Draft Tagged Release
         if: ${{ github.ref_type == 'tag' }}
         uses: docker://antonyurchenko/git-release:v5
