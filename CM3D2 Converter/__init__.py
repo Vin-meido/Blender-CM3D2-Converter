@@ -26,7 +26,6 @@ def install_dependencies():
     if not package_helper.check_module('pythonnet'):
         print("Installing dependency 'pythonnet'...")
         package_helper.install_package('pythonnet==3.0.1')
-        bpy.ops.script.reload()
         raise "Dependencies installed. Restart is required."
     else:
         print("Package 'pythonnet' is installed")
