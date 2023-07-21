@@ -97,8 +97,6 @@ for key, module in locals().copy().items():
     if key == '_pre_locals':
         continue
     if key not in _pre_locals:
-        print(f'local = {key}')
-        print(f'module = {module}')
         _SUB_MODULES.append(module)
             
 if 'bpy' in locals():

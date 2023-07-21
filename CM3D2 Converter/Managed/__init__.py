@@ -22,11 +22,12 @@ if _TYPE_CHECKING:
         """Reference the specified dll"""
         pass
 
-from System.IO import FileLoadException as _FileLoadException
-try:
-    AddReference('CM3D2.Serialization')
-    AddReference('COM3D2.LiveLink')
-except _FileLoadException as ex:
-    from System.Reflection import Assembly as _Assembly
-    _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
-    _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))
+if not _TYPE_CHECKING:
+    from System.IO import FileLoadException as _FileLoadException
+    try:
+        AddReference('CM3D2.Serialization')
+        AddReference('COM3D2.LiveLink')
+    except _FileLoadException as ex:
+        from System.Reflection import Assembly as _Assembly
+        _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
+        _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))

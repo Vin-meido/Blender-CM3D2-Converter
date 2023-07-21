@@ -6,6 +6,8 @@ import bpy
 import cm3d2converter
 
 class BlenderTestCase(TestCase):
+    is_cm3d2converter_registered = False
+    
     @property
     def blend_file_path(self) -> str:
         return str(Path(cm3d2converter.__file__).parent / 'append_data.blend')
@@ -21,8 +23,10 @@ class BlenderTestCase(TestCase):
     def setUp(self):
         super().setUp()
         bpy.ops.wm.open_mainfile(filepath=self.blend_file_path)
-        cm3d2converter.register()
-        cm3d2converter.common.preferences().backup_ext = ''
+        #if not BlenderTestCase.is_cm3d2converter_registered:
+        #    cm3d2converter.register()
+        #    cm3d2converter.common.preferences().backup_ext = ''
+        #    BlenderTestCase.is_cm3d2converter_registere = True
         
 class BlenderTest(BlenderTestCase):
     

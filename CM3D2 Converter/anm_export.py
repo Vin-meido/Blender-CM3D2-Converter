@@ -52,6 +52,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     is_keyframe_clean = bpy.props.BoolProperty(name="同じ変形のキーフレームを掃除", default=True)
     is_visual_transform = bpy.props.BoolProperty(name="Use Visual Transforms", default=True )
     is_smooth_handle = bpy.props.BoolProperty(name="キーフレーム間の変形をスムーズに", default=True)
+    is_export_scale = bpy.props.BoolProperty(name="Export Scale", default=True )
 
     items = [
         ('ARMATURE', "アーマチュア", "", 'OUTLINER_OB_ARMATURE', 1),
@@ -421,6 +422,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         builder.is_remove_ik_bone            = self.is_remove_ik_bone
         builder.is_remove_serial_number_bone = self.is_remove_serial_number_bone
         builder.is_remove_japanese_bone      = self.is_remove_japanese_bone
+        builder.is_export_scale              = self.is_export_scale
         return builder
         
     
@@ -443,6 +445,8 @@ class AnmBuilder:
         self.is_remove_ik_bone            = True
         self.is_remove_serial_number_bone = True
         self.is_remove_japanese_bone      = True
+        
+        self.is_export_scale = True
         
         self.no_set_frame = False
     
@@ -469,11 +473,28 @@ class AnmBuilder:
     def get_animation_frames(self, context, pose, bones, bone_parents):
         fps = context.scene.render.fps
         
-        anm_data_raw = {}
+        anm_data_raw: dict[str, Track] = {}
+        
+        class Track(dict):
+            def __init__(self):
+                super().__init__()
+                self['LOC'] = {}
+                self['ROT'] = {}
+                self['SCL'] = {}
+            @property
+            def loc_dict(self) -> dict[float, mathutils.Vector]:
+                return self['LOC']
+            @property
+            def rot_dict(self) -> dict[float, mathutils.Quaternion]:
+                return self['ROT']
+            @property
+            def scl_dict(self) -> dict[float, mathutils.Vector]:
+                return self['SCL']
+
         class KeyFrame:
             def __init__(self, time, value, slope=None):
                 self.time = time
-                self.value = value
+                self.value: mathutils.Vector | mathutils.Quaternion = value
                 if slope:
                     self.slope = slope
                 elif type(value) == mathutils.Vector:
@@ -490,6 +511,7 @@ class AnmBuilder:
             
         same_locs = {}
         same_rots = {}
+        same_scls = {}
         pre_rots = {}
         for key_frame_index in range(key_frame_count):
             if key_frame_count == 1:
@@ -508,12 +530,13 @@ class AnmBuilder:
 
             for bone in bones:
                 if bone.name not in anm_data_raw:
-                    anm_data_raw[bone.name] = {"LOC": {}, "ROT": {}}
+                    anm_data_raw[bone.name] = Track()
                     same_locs[bone.name] = []
                     same_rots[bone.name] = []
+                    same_scls[bone.name] = []
 
                 pose_bone = pose.bones[bone.name]
-                pose_mat = pose_bone.matrix.copy() #ob.convert_space(pose_bone=pose_bone, matrix=pose_bone.matrix, from_space='POSE', to_space='WORLD')
+                pose_mat: mathutils.Matrix = pose_bone.matrix.copy() #ob.convert_space(pose_bone=pose_bone, matrix=pose_bone.matrix, from_space='POSE', to_space='WORLD')
                 parent = bone_parents[bone.name]
                 if parent:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
@@ -522,65 +545,84 @@ class AnmBuilder:
                 else:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
                     pose_mat = compat.convert_bl_to_cm_space(pose_mat)
-
+                
                 loc = pose_mat.to_translation() * self.scale
                 rot = pose_mat.to_quaternion()
+                scl = pose_mat.to_scale() * self.scale
 
                 # This fixes rotations that jump to alternate representations.
                 if bone.name in pre_rots:
                     if 5.0 < pre_rots[bone.name].rotation_difference(rot).angle:
                         rot.w, rot.x, rot.y, rot.z = -rot.w, -rot.x, -rot.y, -rot.z
                 pre_rots[bone.name] = rot.copy()
-
-                #if parent:
-                #    #loc.x, loc.y, loc.z = -loc.y, -loc.x, loc.z
-                #    loc = compat.convert_bl_to_cm_bone_space(loc)
-                #    
-                #    # quat.w, quat.x, quat.y, quat.z = quat.w, -quat.z, quat.x, -quat.y
-                #    #rot.w, rot.x, rot.y, rot.z = rot.w, rot.y, rot.x, -rot.z
-                #    rot.w, rot.x, rot.y, rot.z = rot.w, rot.y, -rot.z, -rot.x
-                #
-                #else:
-                #    loc.x, loc.y, loc.z = -loc.x, loc.z, -loc.y
-                #
-                #    fix_quat = mathutils.Euler((0, 0, math.radians(-90)), 'XYZ').to_quaternion()
-                #    fix_quat2 = mathutils.Euler((math.radians(-90), 0, 0), 'XYZ').to_quaternion()
-                #    rot = compat.mul3(rot, fix_quat, fix_quat2)
-                #
-                #    rot.w, rot.x, rot.y, rot.z = -rot.y, -rot.z, -rot.x, rot.w
                 
                 if not self.is_keyframe_clean or key_frame_index == 0 or key_frame_index == key_frame_count - 1:
-                    anm_data_raw[bone.name]["LOC"][time] = loc.copy()
-                    anm_data_raw[bone.name]["ROT"][time] = rot.copy()
+                    anm_data_raw[bone.name].loc_dict[time] = loc.copy()
+                    anm_data_raw[bone.name].rot_dict[time] = rot.copy()
+                    anm_data_raw[bone.name].scl_dict[time] = scl.copy()
 
                     if self.is_keyframe_clean:
                         same_locs[bone.name].append(KeyFrame(time, loc.copy()))
                         same_rots[bone.name].append(KeyFrame(time, rot.copy()))
+                        same_scls[bone.name].append(KeyFrame(time, scl.copy()))
                 else:
-                    def is_mismatch(a, b):
-                        return 0.000001 < abs(a - b)
-
-                    a = same_locs[bone.name][-1].value - loc
-                    b = same_locs[bone.name][-1].slope
-                    if is_mismatch(a.x, b.x) or is_mismatch(a.y, b.y) or is_mismatch(a.z, b.z):
-                        if 2 <= len(same_locs[bone.name]):
-                            anm_data_raw[bone.name]["LOC"][same_locs[bone.name][-1].time] = same_locs[bone.name][-1].value.copy()
-                        anm_data_raw[bone.name]["LOC"][time] = loc.copy()
-                        same_locs[bone.name] = [KeyFrame(time, loc.copy(), a.copy())] # update last position and slope
-                    else:
-                        same_locs[bone.name].append(KeyFrame(time, loc.copy(), b.copy())) # update last position, but not last slope
                     
-                    a = same_rots[bone.name][-1].value - rot
-                    b = same_rots[bone.name][-1].slope
-                    if is_mismatch(a.w, b.w) or is_mismatch(a.x, b.x) or is_mismatch(a.y, b.y) or is_mismatch(a.z, b.z):
-                        if 2 <= len(same_rots[bone.name]):
-                            anm_data_raw[bone.name]["ROT"][same_rots[bone.name][-1].time] = same_rots[bone.name][-1].value.copy()
-                        anm_data_raw[bone.name]["ROT"][time] = rot.copy()
-                        same_rots[bone.name] = [KeyFrame(time, rot.copy(), a.copy())] # update last position and slope
-                    else:
-                        same_rots[bone.name].append(KeyFrame(time, rot.copy(), b.copy())) # update last position, but not last slope
-        
+                    def determine_new_keyframe(same_list: list[KeyFrame], current_value: mathutils.Vector | mathutils.Quaternion):
+                        prev_keyframe = same_list[-1]
+                        a = prev_keyframe.value - current_value
+                        b = prev_keyframe.slope
+                        
+                        length = 1
+                        if isinstance(current_value, mathutils.Vector):
+                            length = 3
+                        elif isinstance(current_value, mathutils.Quaternion):
+                            length = 4
+                            
+                        is_mismatch = False
+                        for i in range(length):
+                            if self.check_is_mismatch(a[i], b[i]):
+                                is_mismatch = True
+                                break
+                        
+                        new_keydict: dict[float, mathutils.Vector | mathutils.Quaternion] = {}
+                        if is_mismatch:
+                            if 2 <= len(same_list):
+                                new_keydict[prev_keyframe.time] = prev_keyframe.value.copy()
+                                # anm_data_raw[bone.name]['LOC'][prev_keyframe.time] = prev_keyframe.value.copy()
+                            new_keydict[time] = current_value.copy()
+                            # anm_data_raw[bone.name]['LOC'][time] = current_value.copy()
+                            same_list = [KeyFrame(time, loc.copy(), a.copy())] # update last position and slope
+                        else:
+                            same_list.append(KeyFrame(time, current_value.copy(), b.copy())) # update last position, but not last slope
+                        return same_list, new_keydict
+                    
+                    new_same_list, new_keydict = determine_new_keyframe(same_locs[bone.name].copy(), loc)
+                    same_locs[bone.name] = new_same_list
+                    anm_data_raw[bone.name].loc_dict.update(new_keydict)
+                    
+                    #a = same_rots[bone.name][-1].value - rot
+                    #b = same_rots[bone.name][-1].slope
+                    #if self.check_is_mismatch(a.w, b.w) or self.check_is_mismatch(a.x, b.x) or self.check_is_mismatch(a.y, b.y) or self.check_is_mismatch(a.z, b.z):
+                    #    if 2 <= len(same_rots[bone.name]):
+                    #        anm_data_raw[bone.name].rot_dict[same_rots[bone.name][-1].time] = same_rots[bone.name][-1].value.copy()
+                    #    anm_data_raw[bone.name].rot_dict[time] = rot.copy()
+                    #    same_rots[bone.name] = [KeyFrame(time, rot.copy(), a.copy())] # update last position and slope
+                    #else:
+                    #    same_rots[bone.name].append(KeyFrame(time, rot.copy(), b.copy())) # update last position, but not last slope
+
+                    new_same_list, new_keydict = determine_new_keyframe(same_rots[bone.name].copy(), rot)
+                    same_rots[bone.name] = new_same_list
+                    anm_data_raw[bone.name].rot_dict.update(new_keydict)
+                    
+                    new_same_list, new_keydict = determine_new_keyframe(same_scls[bone.name].copy(), scl)
+                    same_scls[bone.name] = new_same_list
+                    anm_data_raw[bone.name].scl_dict.update(new_keydict)
+                    
         return anm_data_raw
+
+    @staticmethod
+    def check_is_mismatch(a, b):
+        return 0.000001 < abs(a - b)
 
     def get_animation_keyframes(self, context, pose, keyed_bones, fcurves):
         fps = context.scene.render.fps
@@ -868,28 +910,46 @@ class AnmBuilder:
             bones_queue.append(bone)
         return bones
     
-    @staticmethod
-    def get_track_data(anm_data_raw):
+    def get_track_data(self, anm_data_raw):
         track_data = {}
         for bone_name, channels in anm_data_raw.items():
-            track_data[bone_name] = {100: {}, 101: {}, 102: {}, 103: {}, 104: {}, 105: {}, 106: {}}
+            track_data[bone_name] = {
+                Anm.ChannelIdType.LocalRotationX: {},
+                Anm.ChannelIdType.LocalRotationY: {},
+                Anm.ChannelIdType.LocalRotationZ: {},
+                Anm.ChannelIdType.LocalRotationW: {},
+                Anm.ChannelIdType.LocalPositionX: {},
+                Anm.ChannelIdType.LocalPositionY: {},
+                Anm.ChannelIdType.LocalPositionZ: {},
+                Anm.ChannelIdType.ExLocalScaleX : {},
+                Anm.ChannelIdType.ExLocalScaleY : {},
+                Anm.ChannelIdType.ExLocalScaleZ : {}
+            }
             if channels.get('LOC'):
                 has_tangents = bool(channels.get('LOC_IN') and channels.get('LOC_OUT'))
                 for t, loc in channels["LOC"].items():
                     tangent_in  = channels['LOC_IN' ][t] if has_tangents else mathutils.Vector()
                     tangent_out = channels['LOC_OUT'][t] if has_tangents else mathutils.Vector()
-                    track_data[bone_name][104][t] = (loc.x, tangent_in.x, tangent_out.x)
-                    track_data[bone_name][105][t] = (loc.y, tangent_in.y, tangent_out.y)
-                    track_data[bone_name][106][t] = (loc.z, tangent_in.z, tangent_out.z)
+                    track_data[bone_name][Anm.ChannelIdType.LocalPositionX][t] = (loc.x, tangent_in.x, tangent_out.x)
+                    track_data[bone_name][Anm.ChannelIdType.LocalPositionY][t] = (loc.y, tangent_in.y, tangent_out.y)
+                    track_data[bone_name][Anm.ChannelIdType.LocalPositionZ][t] = (loc.z, tangent_in.z, tangent_out.z)
             if channels.get('ROT'):
                 has_tangents = bool(channels.get('ROT_IN') and channels.get('ROT_OUT'))
-                for t, rot in channels["ROT"].items():
+                for t, rot in channels['ROT'].items():
                     tangent_in  = channels['ROT_IN' ][t] if has_tangents else mathutils.Quaternion((0,0,0,0))
                     tangent_out = channels['ROT_OUT'][t] if has_tangents else mathutils.Quaternion((0,0,0,0))
-                    track_data[bone_name][100][t] = (rot.x, tangent_in.x, tangent_out.x)
-                    track_data[bone_name][101][t] = (rot.y, tangent_in.y, tangent_out.y)
-                    track_data[bone_name][102][t] = (rot.z, tangent_in.z, tangent_out.z)
-                    track_data[bone_name][103][t] = (rot.w, tangent_in.w, tangent_out.w)
+                    track_data[bone_name][Anm.ChannelIdType.LocalRotationX][t] = (rot.x, tangent_in.x, tangent_out.x)
+                    track_data[bone_name][Anm.ChannelIdType.LocalRotationY][t] = (rot.y, tangent_in.y, tangent_out.y)
+                    track_data[bone_name][Anm.ChannelIdType.LocalRotationZ][t] = (rot.z, tangent_in.z, tangent_out.z)
+                    track_data[bone_name][Anm.ChannelIdType.LocalRotationW][t] = (rot.w, tangent_in.w, tangent_out.w)
+            if self.is_export_scale and channels.get('SCL'):
+                has_tangents = bool(channels.get('SCL_IN') and channels.get('SCL_OUT'))
+                for t, scl in channels['SCL'].items():
+                    tangent_in  = channels['SCL_IN' ][t] if has_tangents else mathutils.Vector()
+                    tangent_out = channels['SCL_OUT'][t] if has_tangents else mathutils.Vector()
+                    track_data[bone_name][Anm.ChannelIdType.ExLocalScaleX][t] = (scl.x, tangent_in.x, tangent_out.x)
+                    track_data[bone_name][Anm.ChannelIdType.ExLocalScaleY][t] = (scl.y, tangent_in.y, tangent_out.y)
+                    track_data[bone_name][Anm.ChannelIdType.ExLocalScaleZ][t] = (scl.z, tangent_in.z, tangent_out.z)
         return track_data
     
     #@staticmethod
@@ -901,12 +961,13 @@ class AnmBuilder:
         anm.version = version
         
         # Finding generic types can be slow, so do it once here
-        PopulateList_Channel_ = PerformanceExtensions.PopulateList[Anm.Track.Channel]
-        Array_Keyframe_ = Array[Anm.Track.Channel.Keyframe]
+        PopulateList_Channel_ = PerformanceExtensions.PopulateList[Anm.Channel]
+        Array_Keyframe_ = Array[Anm.Keyframe]
         
         bones_with_tracks = [ bone for bone in bones if track_data.get(bone.name) ]
         PerformanceExtensions.PopulateList[Anm.Track](anm.tracks, len(bones_with_tracks))
         for bone, track in zip(bones_with_tracks, anm.tracks):
+            track: Anm.Track
             # track.channelId = 1
             
             bone_names = [bone.name]
@@ -918,13 +979,14 @@ class AnmBuilder:
             
             track.path = '/'.join(bone_names)
             
-            PerformanceExtensions.PopulateList[Anm.Track.Channel](
+            PerformanceExtensions.PopulateList[Anm.Channel](
                 track.channels, len(track_data[bone.name])
             )
             
             for channel, (channel_id, keyframes) in zip(
                     track.channels,
                     sorted(track_data[bone.name].items(), key=lambda x: x[0])):
+                channel: Anm.Channel
                 channel.channelId = channel_id
                 len_keyframes = len(keyframes)
                 channel_keyframes = Array_Keyframe_(len_keyframes)
@@ -932,24 +994,24 @@ class AnmBuilder:
 
                 keyframes_list = sorted(keyframes.items(), key=lambda x: x[0])
                 for i in range(len(keyframes_list)):
-                    keyframe = channel_keyframes[i]
+                    keyframe: Anm.Keyframe = channel_keyframes[i]
                     
                     x = keyframes_list[i][0]
                     y, dydx_in, dydx_out = keyframes_list[i][1]
 
                     keyframe.time = x
                     keyframe.value = y
-                    keyframe.tanIn = dydx_in
-                    keyframe.tanOut = dydx_out
+                    keyframe.inTangent = dydx_in
+                    keyframe.outTangent = dydx_out
                     
                     if len(keyframes_list) <= 1:
-                        keyframe.tanIn = 0.0
-                        keyframe.tanOut = 0.0
+                        keyframe.inTangent = 0.0
+                        keyframe.outTangent = 0.0
                     elif auto_smooth:
                         tan_in, tan_out = AnmBuilder.auto_calc_tangents(time_step, keyframes_list, i)
                         
-                        keyframe.tanIn = tan_in
-                        keyframe.tanOut = tan_out
+                        keyframe.inTangent = tan_in
+                        keyframe.outTangent = tan_out
 
                     channel_keyframes[i] = keyframe
                        

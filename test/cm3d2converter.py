@@ -16,3 +16,6 @@ except: # pylint:disable=bare-except
         __all__.append(k)
         locals()[k] = v
     #__all__ = cm3d2converter.__all__
+
+#import bpy
+register()

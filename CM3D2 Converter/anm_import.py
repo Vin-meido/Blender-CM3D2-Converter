@@ -42,7 +42,7 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
 
     is_location = bpy.props.BoolProperty(name="位置", default=True)
     is_rotation = bpy.props.BoolProperty(name="回転", default=True)
-    is_scale = bpy.props.BoolProperty(name="拡縮", default=False)
+    is_scale    = bpy.props.BoolProperty(name="拡縮", default=True)
     is_tangents = bpy.props.BoolProperty(name="Tangents", default=False)
 
     @classmethod
@@ -76,12 +76,10 @@ class CNV_OT_import_cm3d2_anm(bpy.types.Operator):
         box = self.layout.box()
         box.label(text="読み込むアニメーション情報")
         column = box.column(align=True)
-        column.prop(self, 'is_location', icon=compat.icon('CON_LOCLIKE'))
-        column.prop(self, 'is_rotation', icon=compat.icon('CON_ROTLIKE'))
-        row = column.row()
-        row.prop(self, 'is_scale', icon=compat.icon('CON_SIZELIKE'))
-        row.enabled = False
-        column.prop(self, 'is_tangents', icon=compat.icon('IPO_BEZIER' ))
+        column.prop(self, 'is_location', icon=compat.icon('CON_LOCLIKE' ))
+        column.prop(self, 'is_rotation', icon=compat.icon('CON_ROTLIKE' ))
+        column.prop(self, 'is_scale'   , icon=compat.icon('CON_SIZELIKE'))
+        column.prop(self, 'is_tangents', icon=compat.icon('IPO_BEZIER'  ))
 
     def execute(self, context):
         prefs = common.preferences()
@@ -142,7 +140,7 @@ class AnmImporter:
     
     
     def import_anm(self, context: bpy.types.Context, file: io.BufferedReader, acion_name: str):
-                # ヘッダー
+        # ヘッダー
 
         anm_data = self.read_anm_data(file)
 
@@ -201,7 +199,7 @@ class AnmImporter:
 
             loc_fcurves  = None
 
-            locs, loc_tangents, quats, quat_tangents, bone_found_unknown = \
+            locs, loc_tangents, quats, quat_tangents, scls, scl_tangents, bone_found_unknown = \
                     self.get_bone_keyframe_data(found_unknown, bone_data)
             found_unknown.extend(bone_found_unknown)
 
@@ -457,6 +455,79 @@ class AnmImporter:
                             
 
 
+
+            if self.is_scale:
+                scl_fcurves = [None, None, None]
+                scl_keyframes = [[],[],[]]
+                rna_data_path = 'pose.bones["{bone_name}"].scale'.format(bone_name=bone.name)
+                for axis_index in range(0, 3):
+                    new_fcurve = fcurves.find(rna_data_path, index=axis_index)
+                    if not new_fcurve:
+                        new_fcurve = fcurves.new(rna_data_path, index=axis_index, action_group=pose_bone.name)
+                    scl_fcurves[axis_index] = new_fcurve
+                
+                def _convert_scl(scl) -> mathutils.Vector:
+                    scl = mathutils.Vector(scl) * self.scale
+                    scl_mat: mathutils.Matrix = mathutils.Matrix.LocRotScale(
+                        mathutils.Vector((0,0,0)), 
+                        mathutils.Quaternion((1,0,0,0)), 
+                        scl
+                    )
+                    if bone.parent:
+                        pass
+                        scl_mat = compat.convert_cm_to_bl_bone_space(scl_mat)
+                        scl_mat = compat.mul(bone.parent.matrix_local, scl_mat)
+                        scl_mat = compat.convert_cm_to_bl_bone_rotation(scl_mat)
+                    else:
+                        scl_mat = compat.convert_cm_to_bl_space(scl_mat)
+                        scl_mat = compat.convert_cm_to_bl_bone_rotation(scl_mat)
+                    scl_mat = compat.mul(bone.matrix_local.inverted(), scl_mat)
+                    return scl_mat.to_scale()
+
+                for time, scl in scls.items():
+                    result_scl = _convert_scl(scl)
+                    #pose_bone.location = result_loc
+
+                    #pose_bone.keyframe_insert('location', frame=frame * fps, group=pose_bone.name)
+                    if max_frame < time * fps:
+                        max_frame = time * fps
+     
+                    for fcurve in scl_fcurves:
+                        fcurve: bpy.types.FCurve
+                        keyframe_type = 'KEYFRAME'
+                        tangents = scl_tangents[time]
+                        if tangents:
+                            tangents = mathutils.Vector((tangents['in'][fcurve.array_index], tangents['out'][fcurve.array_index]))
+                            if tangents.magnitude < 1e-6:
+                                keyframe_type = 'JITTER'
+                            elif tangents.magnitude > 0.1:
+                                keyframe_type = 'EXTREME'
+
+                        self._queue_append_keyframe(fcurve, time * fps, result_scl[fcurve.array_index], keyframe_type)                        
+                        scl_keyframes[fcurve.array_index].append(time)
+
+                self._create_keyframes_in_queue()
+                
+                if self.is_loop:
+                    for fcurve in scl_fcurves:
+                        new_modifier = fcurve.modifiers.new('CYCLES')
+
+                if self.is_tangents:
+                    for time, tangents in scl_tangents.items():
+                        tangent_in  = mathutils.Vector(tangents['in' ]) * self.scale
+                        tangent_out = mathutils.Vector(tangents['out']) * self.scale
+                        if bone.parent:
+                            tangent_in  = compat.convert_cm_to_bl_bone_space(tangent_in )
+                            tangent_out = compat.convert_cm_to_bl_bone_space(tangent_out)
+                        else:
+                            tangent_in  = compat.convert_cm_to_bl_space(tangent_in )
+                            tangent_out = compat.convert_cm_to_bl_space(tangent_out)
+                        tangents['in' ][:] = tangent_in [:]
+                        tangents['out'][:] = tangent_out[:]
+
+                    _apply_tangents(scl_fcurves, scl_keyframes, scl_tangents)
+            
+            
         if found_tangents:
             self.reporter.report(type={'INFO'}, message="Found the following tangent values:")
             for f1, f2 in found_tangents:
@@ -480,77 +551,100 @@ class AnmImporter:
         loc_tangents = {}
         quats = {}
         quat_tangents = {}
+        scls = {}
+        scl_tangents = {}
         found_unknown = []
         
         for channel_id, channel_data in bone_data['channels'].items():
-            if channel_id in [100, 101, 102, 103]:
+            rotIdTypes = [
+                Anm.ChannelIdType.LocalRotationX,
+                Anm.ChannelIdType.LocalRotationY,
+                Anm.ChannelIdType.LocalRotationZ,
+                Anm.ChannelIdType.LocalRotationW
+            ]
+            locIdTypes = [
+                Anm.ChannelIdType.LocalPositionX,
+                Anm.ChannelIdType.LocalPositionY,
+                Anm.ChannelIdType.LocalPositionZ
+            ]
+            sclIdTypes = [
+                Anm.ChannelIdType.ExLocalScaleX,
+                Anm.ChannelIdType.ExLocalScaleY,
+                Anm.ChannelIdType.ExLocalScaleZ
+            ]
+            
+            if channel_id in rotIdTypes:
                 for data in channel_data:
                     frame = data['frame']
                     if frame not in quats:
                         quats[frame] = [None, None, None, None]
-
-                    if channel_id == 103:
-                        quats[frame][0] = data['f0']
-                    elif channel_id == 100:
-                        quats[frame][1] = data['f0']
-                    elif channel_id == 101:
-                        quats[frame][2] = data['f0']
-                    elif channel_id == 102:
-                        quats[frame][3] = data['f0']
-
-                        #tangents = (data['f1'], data['f2'])
-                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.01:
-                        #    found_tangents.append(tangents)
                     if frame not in quat_tangents:
                         quat_tangents[frame] = {'in': [None, None, None, None], 'out': [None, None, None, None]}
 
-                    if channel_id == 103:
+                    if   channel_id == Anm.ChannelIdType.LocalRotationW:
+                        quats        [frame]       [0] = data['f0']
                         quat_tangents[frame]['in' ][0] = data['f1']
                         quat_tangents[frame]['out'][0] = data['f2']
-                    elif channel_id == 100:                        
+                    elif channel_id == Anm.ChannelIdType.LocalRotationX:
+                        quats        [frame]       [1] = data['f0']
                         quat_tangents[frame]['in' ][1] = data['f1']
                         quat_tangents[frame]['out'][1] = data['f2']
-                    elif channel_id == 101:                        
+                    elif channel_id == Anm.ChannelIdType.LocalRotationY:
+                        quats        [frame]       [2] = data['f0']
                         quat_tangents[frame]['in' ][2] = data['f1']
                         quat_tangents[frame]['out'][2] = data['f2']
-                    elif channel_id == 102:              
+                    elif channel_id == Anm.ChannelIdType.LocalRotationZ:
+                        quats        [frame]       [3] = data['f0']
                         quat_tangents[frame]['in' ][3] = data['f1']
-                        quat_tangents[frame]['out'][3] = data['f2']
+                        quat_tangents[frame]['out'][3] = data['f2']        
 
-            elif channel_id in [104, 105, 106]:
+            elif channel_id in locIdTypes:
                 for data in channel_data:
                     frame = data['frame']
                     if frame not in locs:
                         locs[frame] = [None, None, None]
-
-                    if channel_id == 104:
-                        locs[frame][0] = data['f0']
-                    elif channel_id == 105:
-                        locs[frame][1] = data['f0']
-                    elif channel_id == 106:
-                        locs[frame][2] = data['f0']
-                        
-                        #tangents = (data['f1'], data['f2'])
-                        #if (data['f1']**2 + data['f2']**2) ** .5 > 0.05:
-                        #    found_tangents.append(tangents)
                     if frame not in loc_tangents:
                         loc_tangents[frame] = {'in': [None, None, None], 'out': [None, None, None]}
 
-                    if channel_id == 104:
+                    if   channel_id == Anm.ChannelIdType.LocalPositionX:
+                        locs        [frame]       [0] = data['f0']
                         loc_tangents[frame]['in' ][0] = data['f1']
                         loc_tangents[frame]['out'][0] = data['f2']
-                    elif channel_id == 105:                       
+                    elif channel_id == Anm.ChannelIdType.LocalPositionY:
+                        locs        [frame]       [1] = data['f0']
                         loc_tangents[frame]['in' ][1] = data['f1']
                         loc_tangents[frame]['out'][1] = data['f2']
-                    elif channel_id == 106:                       
+                    elif channel_id == Anm.ChannelIdType.LocalPositionZ:
+                        locs        [frame]       [2] = data['f0']
                         loc_tangents[frame]['in' ][2] = data['f1']
                         loc_tangents[frame]['out'][2] = data['f2']
+                        
+            elif channel_id in sclIdTypes:
+                for data in channel_data:
+                    frame = data['frame']
+                    if frame not in scls:
+                        scls[frame] = [None, None, None]
+                    if frame not in scl_tangents:
+                        scl_tangents[frame] = {'in': [None, None, None], 'out': [None, None, None]}
+
+                    if   channel_id == Anm.ChannelIdType.ExLocalScaleX:
+                        scls        [frame]       [0] = data['f0']
+                        scl_tangents[frame]['in' ][0] = data['f1']
+                        scl_tangents[frame]['out'][0] = data['f2']
+                    elif channel_id == Anm.ChannelIdType.ExLocalScaleY:
+                        scls        [frame]       [1] = data['f0']
+                        scl_tangents[frame]['in' ][1] = data['f1']
+                        scl_tangents[frame]['out'][1] = data['f2']
+                    elif channel_id == Anm.ChannelIdType.ExLocalScaleZ:
+                        scls        [frame]       [2] = data['f0']
+                        scl_tangents[frame]['in' ][2] = data['f1']
+                        scl_tangents[frame]['out'][2] = data['f2']
 
             elif channel_id not in found_unknown:
                 found_unknown.append(channel_id)
                 self.reporter.report(type={'INFO'}, message=f_tip_("Unknown channel id {num}", num=channel_id))
                 
-        return locs, loc_tangents, quats, quat_tangents, found_unknown
+        return locs, loc_tangents, quats, quat_tangents, scls, scl_tangents, found_unknown
 
     def import_anm_data_to_text(self, context, anm_data):
         if "AnmData" in context.blend_data.texts:
@@ -619,16 +713,17 @@ class AnmImporter:
                 anm_data[base_bone_name]['channels'] = {}
 
             for channel in track.channels:
+                channel: Anm.Channel
                 channel_id = channel.channelId
                 channel_id_str = channel_id
                 anm_data[base_bone_name]['channels'][channel_id_str] = []
                 for keyframe in channel.keyframes:
-                    keyframe: Anm.Track.Channel.Keyframe
+                    keyframe: Anm.Keyframe
                     anm_data[base_bone_name]['channels'][channel_id_str].append({
                         'frame': keyframe.time,
                         'f0': keyframe.value,
-                        'f1': keyframe.tanIn,
-                        'f2': keyframe.tanOut
+                        'f1': keyframe.inTangent,
+                        'f2': keyframe.outTangent
                     })
 
         return anm_data
