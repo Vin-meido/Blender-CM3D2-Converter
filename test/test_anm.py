@@ -7,22 +7,6 @@ import cm3d2converter
 
 class AnmExportTest(BlenderTestCase):
 
-    @staticmethod
-    def activate_object(obj: bpy.types.Object):
-        collections: list[bpy.types.LayerCollection] = obj.users_collection
-        layer_collection = None
-        for child in bpy.context.view_layer.layer_collection.children:
-            child: bpy.types.LayerCollection
-            if child.collection.name == collections[0].name:
-                layer_collection = child
-                break
-        bpy.context.view_layer.active_layer_collection = layer_collection
-        layer_collection.hide_viewport = False
-        layer_collection.exclude = False
-        bpy.context.view_layer.update()
-        bpy.context.view_layer.objects.active = obj
-        
-
     def test_anm_import(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
         self.activate_object(body001_armature_object)

@@ -8,3 +8,6 @@ test/output
 stubs
 logs
 
+# These files are used for testing, but cannot be redistributed 
+# as-per KISS's Terms of Service
+test/resources/dress379_wear.model

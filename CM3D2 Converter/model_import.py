@@ -886,7 +886,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             self.report(type={'ERROR'}, message="Found potentially corrupt local bone data, please re-import with \"Use Local Bone Data\" disabled.")
         return {'FINISHED'}
 
-    def create_mesh(self, context, model_name1, vertex_data, face_data) -> (bpy.types.Object, bpy.types.Mesh):
+    def create_mesh(self, context: bpy.types.Context, model_name1, vertex_data, face_data) -> tuple[bpy.types.Object, bpy.types.Mesh]:
         # メッシュ作成
         me = context.blend_data.meshes.new(model_name1)
         verts, faces = [], []
@@ -937,7 +937,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
         return ob, me
 
-    def create_vertex_groups(self, context, ob, vertex_data, local_bone_data):
+    def create_vertex_groups(self, context: bpy.types.Context, ob: bpy.types.Object, vertex_data, local_bone_data):
         # 頂点グループ作成
         for data in local_bone_data:
             ob.vertex_groups.new(name=common.decode_bone_name(data['name'], self.is_convert_bone_weight_names))
@@ -968,7 +968,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         
         ob.vertex_groups.active_index = 0
     
-    def create_uvs(self, context, me, vertex_data, extra_uv_uses):
+    def create_uvs(self, context: bpy.types.Context, me: bpy.types.Mesh, vertex_data, extra_uv_uses):
         # UV作成
         bm = bmesh.new()
         bm.from_mesh(me)
@@ -984,20 +984,28 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
         bm.to_mesh(me)
         bm.free()
 
-    def create_shapekeys(self, context, ob, misc_data):
+    def create_shapekeys(self, context: bpy.types.Context, ob: bpy.types.Object, misc_data):
         # モーフ追加
-        me = ob.data
+        me: bpy.types.Mesh = ob.data
 
         is_use_attributes = (not compat.IS_LEGACY and bpy.app.version >= (2,92))
-        is_fast_create = (not compat.IS_LEGACY and bpy.app.version >= (3,2)) 
+        is_fast_create = (not compat.IS_LEGACY and bpy.app.version >= (3,2))
 
         #if not is_fast_create:
         #    bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         #    prev_brush_color = context.tool_settings.vertex_paint.brush.color
         
-        vert_loops = dict()
+        vert_loops = {vertex_index: list() for vertex_index in range(len(me.vertices))}
         for loop_index, loop in enumerate(me.loops):
-            vert_loops.setdefault(loop.vertex_index, list()).append(loop_index)
+            vert_loops[loop.vertex_index].append(loop_index)
+            
+        loose_vertices = []
+        for vert_index, loop_indices in vert_loops.items():
+            if not loop_indices:
+                loose_vertices.append(vert_index)
+        if loose_vertices:
+            print(f"Found loose vertices: {loose_vertices}")
+            
         
         def fill_color_layer(layer, color):
             import numpy as np
@@ -1073,7 +1081,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             set_shape_key_data(shape_key, normals_color, unknown_color)
 
 
-    def create_mateprop_old(self, context, me, tex_set, mate, mate_idx, data: list):
+    def create_mateprop_old(self, context: bpy.types.Context, me, tex_set, mate, mate_idx, data: list):
         # create_matepropとの違いは、slot_indexの有無、nodeの接続・配置処理のみ
 
         prefs = common.preferences()
@@ -1103,7 +1111,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
             self.progress(context)
 
-    def create_mateprop(self, context, me, tex_set, mate, mate_idx, data: list):
+    def create_mateprop(self, context: bpy.types.Context, me, tex_set, mate, mate_idx, data: list):
         if mate.use_nodes is False:
             mate.use_nodes = True
 
@@ -1174,7 +1182,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
         cm3d2_data.align_nodes(mate)
 
-    def progress(self, context):
+    def progress(self, context: bpy.types.Context):
         self.progress_count += self.progress_plus_value
         context.window_manager.progress_update(self.progress_count)
 
