@@ -533,9 +533,9 @@ class AnmBuilder:
         if key_frame_count == -1:
             key_frame_count = (self.frame_end - self.frame_start) + 1
             
-        same_locs = {}
-        same_rots = {}
-        same_scls = {}
+        same_locs: dict[str, Vector    ] = {}
+        same_rots: dict[str, Quaternion] = {}
+        same_scls: dict[str, Vector    ] = {}
         pre_rots = {}
         for key_frame_index in range(key_frame_count):
             if key_frame_count == 1:
@@ -615,7 +615,7 @@ class AnmBuilder:
                                 # anm_data_raw[bone.name]['LOC'][prev_keyframe.time] = prev_keyframe.value.copy()
                             new_keydict[time] = current_value.copy()
                             # anm_data_raw[bone.name]['LOC'][time] = current_value.copy()
-                            same_list = [KeyFrame(time, loc.copy(), a.copy())] # update last position and slope
+                            same_list = [KeyFrame(time, current_value.copy(), a.copy())] # update last position and slope
                         else:
                             same_list.append(KeyFrame(time, current_value.copy(), b.copy())) # update last position, but not last slope
                         return same_list, new_keydict
