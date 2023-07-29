@@ -653,7 +653,7 @@ class AnmBuilder:
         
         anm_data_raw = {}
 
-        prop_sizes = {'location': 3, 'rotation_quaternion': 4, 'rotation_euler': 3}
+        prop_sizes = {'location': 3, 'rotation_quaternion': 4, 'rotation_euler': 3, 'scale': 3}
         
         #class KeyFrame:
         #    def __init__(self, time, value):
@@ -730,7 +730,7 @@ class AnmBuilder:
                     #same_rots[bone_name] = []
                 
                 pose_bone = pose.bones[bone_name]
-                rna_data_path = 'pose.bones["{bone_name}"].{property}'.format(bone_name=bone_name, property=prop)
+                rna_data_path = f'pose.bones["{bone_name}"].{prop}'
                 prop_fcurves = [ fcurves.find(rna_data_path, index=axis_index) for axis_index in range(prop_sizes[prop]) ]
                 
                 # Create missing fcurves, and make existing fcurves CM3D2 compatible.
@@ -831,8 +831,6 @@ class AnmBuilder:
             )
 
         bones = self.clean_bone_list(arm, bone_parents, keyed_bones)
-        print(f"keyed_bones = {keyed_bones}")
-        print(f"bones = {bones}")
 
         if self.export_method == 'ALL':
             anm_data_raw = self.get_animation_frames(context, pose, bones, bone_parents)
@@ -871,11 +869,11 @@ class AnmBuilder:
     
     @staticmethod
     def get_keyed_bones(arm: bpy.types.Armature, fcurves):
-        keyed_bones = {'location': [], 'rotation_quaternion': [], 'rotation_euler': []}
+        keyed_bones = {'location': [], 'rotation_quaternion': [], 'rotation_euler': [], 'scale': []}
         for bone in arm.bones:
             bone: bpy.types.Bone
             rna_data_stub = f'pose.bones["{bone.name}"]'
-            for prop, axes in [('location', 3), ('rotation_quaternion', 4), ('rotation_euler', 3)]:
+            for prop, axes in [('location', 3), ('rotation_quaternion', 4), ('rotation_euler', 3), ('scale', 3)]:
                 found_fcurve = False
                 for axis_index in range(0, axes):
                     if fcurves.find(rna_data_stub + '.' + prop, index=axis_index):
@@ -940,7 +938,6 @@ class AnmBuilder:
     def get_track_data(self, anm_data_raw):
         track_data = {}
         for bone_name, channels in anm_data_raw.items():
-            print(f"{bone_name}")
             track_data[bone_name] = {
                 Anm.ChannelIdType.LocalRotationX: {},
                 Anm.ChannelIdType.LocalRotationY: {},
@@ -954,7 +951,6 @@ class AnmBuilder:
                 Anm.ChannelIdType.ExLocalScaleZ : {}
             }
             if self.is_location and channels.get('LOC'):
-                print(f"{bone_name}['LOC']")
                 has_tangents = bool(channels.get('LOC_IN') and channels.get('LOC_OUT'))
                 for t, loc in channels['LOC'].items():
                     tangent_in  = channels['LOC_IN' ][t] if has_tangents else Vector()

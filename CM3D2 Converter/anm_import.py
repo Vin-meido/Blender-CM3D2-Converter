@@ -466,7 +466,7 @@ class AnmImporter:
                     scl_fcurves[axis_index] = new_fcurve
                 
                 def _convert_scl(scl) -> mathutils.Vector:
-                    scl = mathutils.Vector(scl) * self.scale
+                    scl = mathutils.Vector(scl)
                     scl_mat: mathutils.Matrix = mathutils.Matrix.LocRotScale(
                         mathutils.Vector((0,0,0)), 
                         mathutils.Quaternion((1,0,0,0)), 
