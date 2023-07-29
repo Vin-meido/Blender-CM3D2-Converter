@@ -260,7 +260,7 @@ class COM3D2LIVELINK_OT_send_animation(bpy.types.Operator):
             
         current_frame = context.scene.frame_current
         
-        builder = AnmBuilder()
+        builder = AnmBuilder(reporter=self)
         builder.frame_start         = context.scene.frame_current
         builder.frame_end           = min(context.scene.frame_end, builder.frame_start + self.max_frames)
         builder.export_method       = 'ALL'
@@ -326,7 +326,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
     def update_pose(self, context: bpy.types.Context):
         core = _get_active_core()
         
-        builder = AnmBuilder()
+        builder = AnmBuilder(reporter=self)
         builder.no_set_frame        = True
         builder.frame_start         = context.scene.frame_current
         builder.frame_end           = context.scene.frame_current

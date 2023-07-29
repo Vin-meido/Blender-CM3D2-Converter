@@ -175,7 +175,7 @@ class AnmExportTest(BlenderTestCase):
         neck.scale = Vector((1, 10, 20))
         print(neck.scale)
 
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0, is_export_scale=True)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0, is_scale=True)
 
         self.activate_object(body001_armature_copy)
         bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_0)

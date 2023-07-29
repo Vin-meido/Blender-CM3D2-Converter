@@ -8,7 +8,7 @@ import time
 import bpy
 import bmesh
 import mathutils
-from mathutils import Vector, Quaternion
+from mathutils import Vector, Quaternion, Matrix
 from pathlib import Path
 from . import common
 from . import compat
@@ -425,7 +425,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         file.write(struct.pack('<?', False))
 
     def get_anm_builder(self) -> AnmBuilder:
-        builder = AnmBuilder()
+        builder = AnmBuilder(reporter=self)
         builder.scale                        = self.scale
         builder.version                      = self.version
         builder.export_method                = self.export_method
@@ -450,7 +450,9 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     
 
 class AnmBuilder:
-    def __init__(self):
+    def __init__(self, reporter: bpy.types.Operator):
+        self.reporter = reporter
+        
         self.scale = 0.2
         self.version = 1000
         self.export_method = 'ALL'
@@ -560,11 +562,13 @@ class AnmBuilder:
                     same_scls[bone.name] = []
 
                 pose_bone = pose.bones[bone.name]
-                pose_mat: mathutils.Matrix = pose_bone.matrix.copy() #ob.convert_space(pose_bone=pose_bone, matrix=pose_bone.matrix, from_space='POSE', to_space='WORLD')
+                pose_mat: Matrix = pose_bone.matrix.copy() #ob.convert_space(pose_bone=pose_bone, matrix=pose_bone.matrix, from_space='POSE', to_space='WORLD')
                 parent = bone_parents[bone.name]
                 if parent:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
-                    pose_mat = compat.mul(pose.bones[parent.name].matrix.inverted(), pose_mat)
+                    parent_space = self.try_get_bone_inverse(pose.bones[parent.name])
+                    if parent_space is None:
+                        continue
                     pose_mat = compat.convert_bl_to_cm_bone_space(pose_mat)
                 else:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
@@ -717,7 +721,7 @@ class AnmBuilder:
                 #quat.w, quat.x, quat.y, quat.z = quat.w, -quat.z, quat.x, -quat.y
                 quat.w, quat.y, quat.x, quat.z = quat.w, -quat.z, quat.y, -quat.x
             else:
-                quat = compat.mul(mathutils.Matrix.Rotation(math.radians(90.0), 4, 'Z').to_quaternion(), quat)
+                quat = compat.mul(Matrix.Rotation(math.radians(90.0), 4, 'Z').to_quaternion(), quat)
                 quat.w, quat.y, quat.x, quat.z = quat.w, -quat.z, quat.y, -quat.x
             return quat
 
@@ -1071,7 +1075,18 @@ class AnmBuilder:
         tan_out = join_rad if next_x - x <= time_step * 1.5 else next_rad
         return tan_in,tan_out
 
-
+    def try_get_bone_inverse(self, bone: bpy.types.PoseBone) -> Matrix | None:
+        inverse = None
+        try:
+            inverse = bone.matrix.inverted()
+        except ValueError:
+            self.reporter.report(
+                type={'ERROR'}, 
+                message=f_("The bone '{bone}' has an invalid matrix ({matrix})", 
+                           bone=bone.name,
+                           matrix=bone.matrix)
+            )
+        return inverse
 
 # メニューに登録する関数
 def menu_func(self, context):
