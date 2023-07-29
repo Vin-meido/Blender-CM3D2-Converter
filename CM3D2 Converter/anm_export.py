@@ -8,6 +8,7 @@ import time
 import bpy
 import bmesh
 import mathutils
+from mathutils import Vector, Quaternion
 from pathlib import Path
 from . import common
 from . import compat
@@ -306,17 +307,17 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
             anm_data[bone_name] = {100: {}, 101: {}, 102: {}, 103: {}, 104: {}, 105: {}, 106: {}}
             if channels.get('LOC'):
                 has_tangents = bool(channels.get('LOC_IN') and channels.get('LOC_OUT'))
-                for time, loc in channels["LOC"].items():
-                    tangent_in  = channels['LOC_IN' ][time] if has_tangents else mathutils.Vector()
-                    tangent_out = channels['LOC_OUT'][time] if has_tangents else mathutils.Vector()
+                for time, loc in channels['LOC'].items():
+                    tangent_in  = channels['LOC_IN' ][time] if has_tangents else Vector((0,0,0))
+                    tangent_out = channels['LOC_OUT'][time] if has_tangents else Vector((0,0,0))
                     anm_data[bone_name][104][time] = (loc.x, tangent_in.x, tangent_out.x)
                     anm_data[bone_name][105][time] = (loc.y, tangent_in.y, tangent_out.y)
                     anm_data[bone_name][106][time] = (loc.z, tangent_in.z, tangent_out.z)
             if channels.get('ROT'):
                 has_tangents = bool(channels.get('ROT_IN') and channels.get('ROT_OUT'))
-                for time, rot in channels["ROT"].items():
-                    tangent_in  = channels['ROT_IN' ][time] if has_tangents else mathutils.Quaternion((0,0,0,0))
-                    tangent_out = channels['ROT_OUT'][time] if has_tangents else mathutils.Quaternion((0,0,0,0))
+                for time, rot in channels['ROT'].items():
+                    tangent_in  = channels['ROT_IN' ][time] if has_tangents else Quaternion((0,0,0,0))
+                    tangent_out = channels['ROT_OUT'][time] if has_tangents else Quaternion((0,0,0,0))
                     anm_data[bone_name][100][time] = (rot.x, tangent_in.x, tangent_out.x)
                     anm_data[bone_name][101][time] = (rot.y, tangent_in.y, tangent_out.y)
                     anm_data[bone_name][102][time] = (rot.z, tangent_in.z, tangent_out.z)
@@ -505,25 +506,25 @@ class AnmBuilder:
                 self['ROT'] = {}
                 self['SCL'] = {}
             @property
-            def loc_dict(self) -> dict[float, mathutils.Vector]:
+            def loc_dict(self) -> dict[float, Vector]:
                 return self['LOC']
             @property
-            def rot_dict(self) -> dict[float, mathutils.Quaternion]:
+            def rot_dict(self) -> dict[float, Quaternion]:
                 return self['ROT']
             @property
-            def scl_dict(self) -> dict[float, mathutils.Vector]:
+            def scl_dict(self) -> dict[float, Vector]:
                 return self['SCL']
 
         class KeyFrame:
             def __init__(self, time, value, slope=None):
                 self.time = time
-                self.value: mathutils.Vector | mathutils.Quaternion = value
+                self.value: Vector | Quaternion = value
                 if slope:
                     self.slope = slope
-                elif type(value) == mathutils.Vector:
-                    self.slope = mathutils.Vector.Fill(len(value))
-                elif type(value) == mathutils.Quaternion:
-                    self.slope = mathutils.Quaternion((0,0,0,0))
+                elif type(value) == Vector:
+                    self.slope = Vector.Fill(len(value))
+                elif type(value) == Quaternion:
+                    self.slope = Quaternion((0,0,0,0))
                 else:
                     self.slope = 0
 
@@ -590,15 +591,15 @@ class AnmBuilder:
                         same_scls[bone.name].append(KeyFrame(time, scl.copy()))
                 else:
                     
-                    def determine_new_keyframe(same_list: list[KeyFrame], current_value: mathutils.Vector | mathutils.Quaternion):
+                    def determine_new_keyframe(same_list: list[KeyFrame], current_value: Vector | Quaternion):
                         prev_keyframe = same_list[-1]
                         a = prev_keyframe.value - current_value
                         b = prev_keyframe.slope
                         
                         length = 1
-                        if isinstance(current_value, mathutils.Vector):
+                        if isinstance(current_value, Vector):
                             length = 3
-                        elif isinstance(current_value, mathutils.Quaternion):
+                        elif isinstance(current_value, Quaternion):
                             length = 4
                             
                         is_mismatch = False
@@ -607,7 +608,7 @@ class AnmBuilder:
                                 is_mismatch = True
                                 break
                         
-                        new_keydict: dict[float, mathutils.Vector | mathutils.Quaternion] = {}
+                        new_keydict: dict[float, Vector | Quaternion] = {}
                         if is_mismatch:
                             if 2 <= len(same_list):
                                 new_keydict[prev_keyframe.time] = prev_keyframe.value.copy()
@@ -663,7 +664,7 @@ class AnmBuilder:
         #pre_rots = {}
         
         def _convert_loc(pose_bone, loc):
-            loc = mathutils.Vector(loc)
+            loc = Vector(loc)
             loc = compat.mul(pose_bone.bone.matrix_local, loc)
             if pose_bone.parent:
                 loc = compat.mul(pose_bone.parent.bone.matrix_local.inverted(), loc)
@@ -673,11 +674,11 @@ class AnmBuilder:
             return loc * self.scale
         """
         def _convert_quat(pose_bone, quat):
-            #quat = mathutils.Quaternion(quat)
+            #quat = Quaternion(quat)
             #'''Can't use matrix transforms here as they would mess up interpolation.'''
             #quat = compat.mul(pose_bone.bone.matrix_local.to_quaternion(), quat)
             
-            quat_mat = mathutils.Quaternion(quat).to_matrix().to_4x4()
+            quat_mat = Quaternion(quat).to_matrix().to_4x4()
             quat_mat = compat.mul(pose_bone.bone.matrix_local, quat_mat)
             #quat = quat_mat.to_quaternion()
             if pose_bone.parent:
@@ -707,7 +708,7 @@ class AnmBuilder:
 
         def _convert_quat(pose_bone, quat):
             bone_quat = pose_bone.bone.matrix.to_quaternion()
-            quat = mathutils.Quaternion(quat)
+            quat = Quaternion(quat)
 
             '''Can't use matrix transforms here as they would mess up interpolation.'''
             quat = compat.mul(bone_quat, quat)
@@ -796,9 +797,9 @@ class AnmBuilder:
                         anm_data_raw[bone_name]['ROT_OUT'][time] = _convert_quat(pose_bone, tangent_out ).copy()
                         anm_data_raw[bone_name]['ROT_IN' ][time] = _convert_quat(pose_bone, tangent_in  ).copy()
                         # - - - Alternative Method - - -
-                        #raw_keyframe = mathutils.Quaternion(raw_keyframe)
-                        #tangent_in   = mathutils.Quaternion(tangent_in)
-                        #tangent_out  = mathutils.Quaternion(tangent_out)
+                        #raw_keyframe = Quaternion(raw_keyframe)
+                        #tangent_in   = Quaternion(tangent_in)
+                        #tangent_out  = Quaternion(tangent_out)
                         #converted_quat = _convert_quat(pose_bone, raw_keyframe).copy()
                         #anm_data_raw[bone_name]['ROT'    ][time] = converted_quat.copy()
                         #anm_data_raw[bone_name]['ROT_IN' ][time] = converted_quat.inverted() @ _convert_quat(pose_bone, raw_keyframe @ tangent_in  )
@@ -956,16 +957,16 @@ class AnmBuilder:
                 print(f"{bone_name}['LOC']")
                 has_tangents = bool(channels.get('LOC_IN') and channels.get('LOC_OUT'))
                 for t, loc in channels['LOC'].items():
-                    tangent_in  = channels['LOC_IN' ][t] if has_tangents else mathutils.Vector()
-                    tangent_out = channels['LOC_OUT'][t] if has_tangents else mathutils.Vector()
+                    tangent_in  = channels['LOC_IN' ][t] if has_tangents else Vector()
+                    tangent_out = channels['LOC_OUT'][t] if has_tangents else Vector()
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionX][t] = (loc.x, tangent_in.x, tangent_out.x)
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionY][t] = (loc.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionZ][t] = (loc.z, tangent_in.z, tangent_out.z)
             if self.is_rotation and channels.get('ROT'):
                 has_tangents = bool(channels.get('ROT_IN') and channels.get('ROT_OUT'))
                 for t, rot in channels['ROT'].items():
-                    tangent_in  = channels['ROT_IN' ][t] if has_tangents else mathutils.Quaternion((0,0,0,0))
-                    tangent_out = channels['ROT_OUT'][t] if has_tangents else mathutils.Quaternion((0,0,0,0))
+                    tangent_in  = channels['ROT_IN' ][t] if has_tangents else Quaternion((0,0,0,0))
+                    tangent_out = channels['ROT_OUT'][t] if has_tangents else Quaternion((0,0,0,0))
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationX][t] = (rot.x, tangent_in.x, tangent_out.x)
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationY][t] = (rot.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationZ][t] = (rot.z, tangent_in.z, tangent_out.z)
@@ -973,8 +974,8 @@ class AnmBuilder:
             if self.is_scale and channels.get('SCL'):
                 has_tangents = bool(channels.get('SCL_IN') and channels.get('SCL_OUT'))
                 for t, scl in channels['SCL'].items():
-                    tangent_in  = channels['SCL_IN' ][t] if has_tangents else mathutils.Vector()
-                    tangent_out = channels['SCL_OUT'][t] if has_tangents else mathutils.Vector()
+                    tangent_in  = channels['SCL_IN' ][t] if has_tangents else Vector()
+                    tangent_out = channels['SCL_OUT'][t] if has_tangents else Vector()
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleX][t] = (scl.x, tangent_in.x, tangent_out.x)
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleY][t] = (scl.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleZ][t] = (scl.z, tangent_in.z, tangent_out.z)
