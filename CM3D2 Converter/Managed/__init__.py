@@ -4,30 +4,58 @@
 
 import sys as _sys
 from pathlib import Path as _Path
-from typing import TYPE_CHECKING as _TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 _MANAGED_DIR = _Path(__file__).parent.absolute()
+_LOADED = False
 
 import pythonnet as _pythonnet
-_pythonnet.set_runtime('netfx')
 
-from pythonnet import unload
+def load():
+    global _LOADED
+    if not _pythonnet._LOADED:
+        _pythonnet.set_runtime('netfx')
+    _pythonnet.load()
+    _LOADED = True
+    _add_references()
 
-if not _TYPE_CHECKING:
-    from clr import *
-    _sys.path.append(str(_MANAGED_DIR))
 
-if _TYPE_CHECKING:
-    def AddReference(dll_name: str):
-        """Reference the specified dll"""
-        pass
-
-if not _TYPE_CHECKING:
-    from System.IO import FileLoadException as _FileLoadException
+def unload() -> bool:
+    """Returns true if the runtime was successfuly unloaded."""
+    global _LOADED
+    if not _LOADED:
+        return True
     try:
-        AddReference('CM3D2.Serialization')
-        AddReference('COM3D2.LiveLink')
-    except _FileLoadException as ex:
-        from System.Reflection import Assembly as _Assembly
-        _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
-        _Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))
+        _pythonnet.unload()
+        _LOADED = False
+    except RuntimeError:
+        return False
+    return True
+
+def reload():
+    """Reload the runtime and managed assemblies"""
+    import importlib
+    if _LOADED:
+        unload()
+    importlib.reload(_pythonnet)
+    load()
+
+def _add_references():
+    if TYPE_CHECKING:
+        class clr():
+            @staticmethod
+            def AddReference(dll_name: str):
+                """Reference the specified dll"""
+    else:
+        import clr
+    from System.IO import FileLoadException
+    from System.Reflection import Assembly
+    
+    _sys.path.append(str(_MANAGED_DIR))
+    
+    try:
+        clr.AddReference('CM3D2.Serialization')
+        clr.AddReference('COM3D2.LiveLink')
+    except FileLoadException as ex:
+        Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
+        Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))

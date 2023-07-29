@@ -11,7 +11,6 @@ from . import common
 from . import compat
 from . anm_export import AnmBuilder
 
-from . import Managed
 from COM3D2.LiveLink import *
 from CM3D2.Serialization import CM3D2Serializer
 from System.IO import MemoryStream

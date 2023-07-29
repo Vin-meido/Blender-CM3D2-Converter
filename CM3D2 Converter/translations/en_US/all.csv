@@ -113,6 +113,7 @@ Context,Original,Translation,Comments
 "*","キーフレーム数","Number of Key Frames"
 "*","再生速度","Playback Speed"
 "*","除外するボーン","Bones to Exclude"
+"*","輸出アニメーション情報","Animation Data to Export"
 "*","Creating missing FCurve for {path}[{index}]","Creating missing FCurve for {path}[{index}]"
 "*","Creating missing keyframe @ frame {frame} for {path}[{index}]","Creating missing keyframe @ frame {frame} for {path}[{index}]"
 # anm_import.py

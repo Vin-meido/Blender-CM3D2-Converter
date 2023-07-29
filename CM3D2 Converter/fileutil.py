@@ -6,7 +6,6 @@ import shutil
 import tempfile
 from typing import TypeVar
 
-from . import Managed
 from System.IO import MemoryStream
 from CM3D2.Serialization import CM3D2Serializer, ICM3D2Serializable
 

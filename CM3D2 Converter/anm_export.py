@@ -8,13 +8,13 @@ import time
 import bpy
 import bmesh
 import mathutils
+from pathlib import Path
 from . import common
 from . import compat
 from . translations.pgettext_functions import *
 from . fileutil import serialize_to_file
 from . import misc_DOPESHEET_MT_editor_menus
 
-from . import Managed
 from CM3D2.Serialization.Files import Anm
 from CM3D2.Serialization.Performance import PerformanceExtensions
 from System import Array
@@ -29,8 +29,8 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     filepath = bpy.props.StringProperty(subtype='FILE_PATH')
-    filename_ext = ".anm"
-    filter_glob = bpy.props.StringProperty(default="*.anm", options={'HIDDEN'})
+    filename_ext = '.ex.anm'
+    filter_glob = bpy.props.StringProperty(default='*.anm', options={'HIDDEN'})
 
     scale = bpy.props.FloatProperty(name="倍率", default=0.2, min=0.1, max=100, soft_min=0.1, soft_max=100, step=100, precision=1, description="エクスポート時のメッシュ等の拡大率です")
     is_backup = bpy.props.BoolProperty(name="ファイルをバックアップ", default=True, description="ファイルに上書きする場合にバックアップファイルを複製します")
@@ -52,13 +52,16 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     is_keyframe_clean = bpy.props.BoolProperty(name="同じ変形のキーフレームを掃除", default=True)
     is_visual_transform = bpy.props.BoolProperty(name="Use Visual Transforms", default=True )
     is_smooth_handle = bpy.props.BoolProperty(name="キーフレーム間の変形をスムーズに", default=True)
-    is_export_scale = bpy.props.BoolProperty(name="Export Scale", default=True )
 
     items = [
         ('ARMATURE', "アーマチュア", "", 'OUTLINER_OB_ARMATURE', 1),
         ('ARMATURE_PROPERTY', "アーマチュア内プロパティ", "", 'ARMATURE_DATA', 2),
     ]
     bone_parent_from = bpy.props.EnumProperty(items=items, name="ボーン親情報の参照先", default='ARMATURE_PROPERTY')
+    
+    is_location = bpy.props.BoolProperty(name="Export Location"  , default=True )
+    is_rotation = bpy.props.BoolProperty(name="Export Rotation"  , default=True )
+    is_scale    = bpy.props.BoolProperty(name="Export Scale (Ex)", default=True)
 
     is_remove_unkeyed_bone       = bpy.props.BoolProperty(name="Remove Unkeyed Bones", default=False)
     is_remove_alone_bone         = bpy.props.BoolProperty(name="親も子も存在しない", default=True)
@@ -83,9 +86,9 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
             action_name = common.remove_serial_number(ob.animation_data.action.name)
 
         if prefs.anm_default_path:
-            self.filepath = common.default_cm3d2_dir(prefs.anm_default_path, action_name, "anm")
+            self.filepath = common.default_cm3d2_dir(prefs.anm_default_path, action_name, 'ex.anm')
         else:
-            self.filepath = common.default_cm3d2_dir(prefs.anm_export_path, action_name, "anm")
+            self.filepath = common.default_cm3d2_dir(prefs.anm_export_path, action_name, 'ex.anm')
         self.frame_start = context.scene.frame_start
         self.frame_end = context.scene.frame_end
         self.scale = 1.0 / prefs.scale
@@ -127,6 +130,13 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         sub_box = box.box()
         sub_box.label(text="ボーン親情報の参照先", icon='FILE_PARENT')
         sub_box.prop(self, 'bone_parent_from', icon='FILE_PARENT', expand=True)
+        
+        sub_box = box.box()
+        sub_box.label(text="輸出アニメーション情報")
+        column = sub_box.column(align=True)
+        column.prop(self, 'is_location', icon=compat.icon('CON_LOCLIKE' ))
+        column.prop(self, 'is_rotation', icon=compat.icon('CON_ROTLIKE' ))
+        column.prop(self, 'is_scale'   , icon=compat.icon('CON_SIZELIKE'))
 
         sub_box = box.box()
         sub_box.label(text="除外するボーン", icon='X')
@@ -136,6 +146,15 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         column.prop(self, 'is_remove_ik_bone'           , icon='CONSTRAINT_BONE'        )
         column.prop(self, 'is_remove_serial_number_bone', icon='SEQUENCE'               )
         column.prop(self, 'is_remove_japanese_bone'     , icon=compat.icon('HOLDOUT_ON'))
+        
+        is_ex_anm = self.is_scale
+        path = Path(self.filepath)
+        if is_ex_anm:
+            if not path.stem.endswith('.ex'):
+                self.filepath = str(path.with_stem(path.stem + '.ex'))
+        else:
+            if path.stem.endswith('.ex'):
+                self.filepath = str(path.with_stem(path.stem.removesuffix('.ex')))
 
     def execute(self, context):
         common.preferences().anm_export_path = self.filepath
@@ -417,12 +436,14 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         builder.is_visual_transform          = self.is_visual_transform
         builder.is_smooth_handle             = self.is_smooth_handle
         builder.bone_parent_from             = self.bone_parent_from
+        builder.is_location                  = self.is_location
+        builder.is_rotation                  = self.is_rotation
+        builder.is_scale                     = self.is_scale
         builder.is_remove_unkeyed_bone       = self.is_remove_unkeyed_bone
         builder.is_remove_alone_bone         = self.is_remove_alone_bone
         builder.is_remove_ik_bone            = self.is_remove_ik_bone
         builder.is_remove_serial_number_bone = self.is_remove_serial_number_bone
         builder.is_remove_japanese_bone      = self.is_remove_japanese_bone
-        builder.is_export_scale              = self.is_export_scale
         return builder
         
     
@@ -440,13 +461,15 @@ class AnmBuilder:
         self.is_visual_transform = True
         self.is_smooth_handle = True
         self.bone_parent_from = 'ARMATURE_PROPERTY'
+        self.is_location = True
+        self.is_rotation = True
+        self.is_scale    = False
         self.is_remove_unkeyed_bone       = False
         self.is_remove_alone_bone         = True
         self.is_remove_ik_bone            = True
         self.is_remove_serial_number_bone = True
         self.is_remove_japanese_bone      = True
         
-        self.is_export_scale = True
         
         self.no_set_frame = False
     
@@ -548,7 +571,7 @@ class AnmBuilder:
                 
                 loc = pose_mat.to_translation() * self.scale
                 rot = pose_mat.to_quaternion()
-                scl = pose_mat.to_scale() * self.scale
+                scl = pose_mat.to_scale()
 
                 # This fixes rotations that jump to alternate representations.
                 if bone.name in pre_rots:
@@ -807,6 +830,8 @@ class AnmBuilder:
             )
 
         bones = self.clean_bone_list(arm, bone_parents, keyed_bones)
+        print(f"keyed_bones = {keyed_bones}")
+        print(f"bones = {bones}")
 
         if self.export_method == 'ALL':
             anm_data_raw = self.get_animation_frames(context, pose, bones, bone_parents)
@@ -844,9 +869,10 @@ class AnmBuilder:
         return bone_parents
     
     @staticmethod
-    def get_keyed_bones(arm, fcurves):
+    def get_keyed_bones(arm: bpy.types.Armature, fcurves):
         keyed_bones = {'location': [], 'rotation_quaternion': [], 'rotation_euler': []}
         for bone in arm.bones:
+            bone: bpy.types.Bone
             rna_data_stub = f'pose.bones["{bone.name}"]'
             for prop, axes in [('location', 3), ('rotation_quaternion', 4), ('rotation_euler', 3)]:
                 found_fcurve = False
@@ -913,6 +939,7 @@ class AnmBuilder:
     def get_track_data(self, anm_data_raw):
         track_data = {}
         for bone_name, channels in anm_data_raw.items():
+            print(f"{bone_name}")
             track_data[bone_name] = {
                 Anm.ChannelIdType.LocalRotationX: {},
                 Anm.ChannelIdType.LocalRotationY: {},
@@ -925,15 +952,16 @@ class AnmBuilder:
                 Anm.ChannelIdType.ExLocalScaleY : {},
                 Anm.ChannelIdType.ExLocalScaleZ : {}
             }
-            if channels.get('LOC'):
+            if self.is_location and channels.get('LOC'):
+                print(f"{bone_name}['LOC']")
                 has_tangents = bool(channels.get('LOC_IN') and channels.get('LOC_OUT'))
-                for t, loc in channels["LOC"].items():
+                for t, loc in channels['LOC'].items():
                     tangent_in  = channels['LOC_IN' ][t] if has_tangents else mathutils.Vector()
                     tangent_out = channels['LOC_OUT'][t] if has_tangents else mathutils.Vector()
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionX][t] = (loc.x, tangent_in.x, tangent_out.x)
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionY][t] = (loc.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.LocalPositionZ][t] = (loc.z, tangent_in.z, tangent_out.z)
-            if channels.get('ROT'):
+            if self.is_rotation and channels.get('ROT'):
                 has_tangents = bool(channels.get('ROT_IN') and channels.get('ROT_OUT'))
                 for t, rot in channels['ROT'].items():
                     tangent_in  = channels['ROT_IN' ][t] if has_tangents else mathutils.Quaternion((0,0,0,0))
@@ -942,7 +970,7 @@ class AnmBuilder:
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationY][t] = (rot.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationZ][t] = (rot.z, tangent_in.z, tangent_out.z)
                     track_data[bone_name][Anm.ChannelIdType.LocalRotationW][t] = (rot.w, tangent_in.w, tangent_out.w)
-            if self.is_export_scale and channels.get('SCL'):
+            if self.is_scale and channels.get('SCL'):
                 has_tangents = bool(channels.get('SCL_IN') and channels.get('SCL_OUT'))
                 for t, scl in channels['SCL'].items():
                     tangent_in  = channels['SCL_IN' ][t] if has_tangents else mathutils.Vector()

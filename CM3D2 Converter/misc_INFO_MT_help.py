@@ -177,8 +177,6 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
         zip_file = open(zip_path, 'wb')
         zip_file.write(response.read())
         zip_file.close()
-
-        Managed.unload()
         
         zip_file = zipfile.ZipFile(zip_path, 'r')
         sub_dir = ""
@@ -204,6 +202,8 @@ class CNV_OT_update_cm3d2_converter(bpy.types.Operator):
                         new_hash = hashlib.md5(zip_file.read(path)).hexdigest()
                     if old_hash != new_hash:
                         # self.is_restart = True
+                        if 'Managed' in path:
+                            Managed.unload()
                         old_dir = addon_path / '_old'
                         if not old_dir.exists():
                             os.mkdir(old_dir)

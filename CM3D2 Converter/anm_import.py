@@ -13,7 +13,6 @@ from . fileutil import deserialize_from_file
 from . translations.pgettext_functions import *
 from . common import CM3D2ImportError
 
-from . import Managed
 from CM3D2.Serialization.Files import Anm
 from System import FormatException
 

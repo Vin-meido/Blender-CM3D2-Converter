@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2023, 7, "pre-21"),
+    "version": ("luv", 2023, 7, "pre-29"),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -32,6 +32,15 @@ def install_dependencies():
 install_dependencies()
 
 
+
+from . import Managed
+if 'bpy' in locals():
+    if not hasattr(Managed, '_LOADED') or not Managed._LOADED:
+        importlib.reload(Managed)
+        Managed.reload()
+else:
+    Managed.load()
+
 # Dynamically detect what modules are imported in the following section
 if '_SUB_MODULES' not in locals():
     _SUB_MODULES = []
@@ -42,7 +51,6 @@ if True:
     from . import compat
     from . import common
     from . import cm3d2_data
-    from . import Managed
 
     from . import model_import
     from . import model_export
@@ -101,7 +109,6 @@ for key, module in locals().copy().items():
             
 if 'bpy' in locals():
     import importlib
-    Managed.unload()
     for module in _SUB_MODULES:
         print(f"Reload module {module}")
         try:
