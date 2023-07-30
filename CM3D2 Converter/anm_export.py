@@ -573,6 +573,7 @@ class AnmBuilder:
                     parent_space = self.try_get_bone_inverse(pose.bones[parent.name], frame)
                     if parent_space is None:
                         continue
+                    pose_mat = compat.mul(parent_space, pose_mat)
                     pose_mat = compat.convert_bl_to_cm_bone_space(pose_mat)
                 else:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
@@ -1081,7 +1082,7 @@ class AnmBuilder:
         tan_out = join_rad if next_x - x <= time_step * 1.5 else next_rad
         return tan_in,tan_out
 
-    
+
     def try_get_bone_inverse(self, bone: bpy.types.PoseBone, frame: float) -> Matrix | None:
         inverse = None
         try:
