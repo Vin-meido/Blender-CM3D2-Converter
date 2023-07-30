@@ -476,7 +476,7 @@ class AnmBuilder:
         
         self.no_set_frame = False
         
-        self._invalid_bones: list[bpy.types.PoseBone] = []
+        self._invalid_bones: dict[bpy.types.PoseBone, list[tuple(float, Matrix)]] = []
     
     def build_anm(self, context) -> Anm:
         obj = context.active_object
@@ -570,7 +570,7 @@ class AnmBuilder:
                 parent = bone_parents[bone.name]
                 if parent:
                     pose_mat = compat.convert_bl_to_cm_bone_rotation(pose_mat)
-                    parent_space = self.try_get_bone_inverse(pose.bones[parent.name])
+                    parent_space = self.try_get_bone_inverse(pose.bones[parent.name], frame)
                     if parent_space is None:
                         continue
                     pose_mat = compat.convert_bl_to_cm_bone_space(pose_mat)
@@ -1082,22 +1082,25 @@ class AnmBuilder:
         return tan_in,tan_out
 
     
-    def try_get_bone_inverse(self, bone: bpy.types.PoseBone) -> Matrix | None:
+    def try_get_bone_inverse(self, bone: bpy.types.PoseBone, frame: float) -> Matrix | None:
         inverse = None
         try:
             inverse = bone.matrix.inverted()
         except ValueError:
             if bone not in self._invalid_bones:
-                self._invalid_bones.append(bone)
+                self._invalid_bones[bone] = []
+            self._invalid_bones[bone].append((frame, bone.matrix))
         return inverse
     
     def report_invalid_bones(self):
-        for bone in self._invalid_bones:
+        for bone, frames in self._invalid_bones.items():
             self.reporter.report(
-                type={'ERROR'}, 
-                message=f_("The bone '{bone}' has an invalid matrix:\n{matrix}", 
+                type={'ERROR'},
+                message=f_("The bone '{bone}' had an invalid matrix between frames {frame_from}-{frame_to} in animation:\n{matrix}", 
                            bone=bone.name,
-                           matrix=bone.matrix)
+                           frame_min=frames[0][0],
+                           frame_max=frames[-1][0],
+                           matrix=frames[0][1])
             )
 
 # メニューに登録する関数
