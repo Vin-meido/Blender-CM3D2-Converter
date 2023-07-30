@@ -475,6 +475,8 @@ class AnmBuilder:
         
         
         self.no_set_frame = False
+        
+        self._invalid_bones: list[bpy.types.PoseBone] = []
     
     def build_anm(self, context) -> Anm:
         obj = context.active_object
@@ -554,6 +556,8 @@ class AnmBuilder:
 
             time = (frame - self.frame_start) / fps * (1.0 / self.time_scale)
 
+            self._invalid_bones = []
+            
             for bone in bones:
                 if bone.name not in anm_data_raw:
                     anm_data_raw[bone.name] = Track()
@@ -645,6 +649,8 @@ class AnmBuilder:
                     new_same_list, new_keydict = determine_new_keyframe(same_scls[bone.name].copy(), scl)
                     same_scls[bone.name] = new_same_list
                     anm_data_raw[bone.name].scl_dict.update(new_keydict)
+            
+            self.report_invalid_bones()
                     
         return anm_data_raw
 
@@ -843,7 +849,7 @@ class AnmBuilder:
 
         if copied_action:
             context.blend_data.actions.remove(copied_action, do_unlink=True, do_id_user=True, do_ui_user=True)
-                                                      
+                                   
         return bones, anm_data_raw
 
     @staticmethod
@@ -1075,18 +1081,24 @@ class AnmBuilder:
         tan_out = join_rad if next_x - x <= time_step * 1.5 else next_rad
         return tan_in,tan_out
 
+    
     def try_get_bone_inverse(self, bone: bpy.types.PoseBone) -> Matrix | None:
         inverse = None
         try:
             inverse = bone.matrix.inverted()
         except ValueError:
+            if bone not in self._invalid_bones:
+                self._invalid_bones.append(bone)
+        return inverse
+    
+    def report_invalid_bones(self):
+        for bone in self._invalid_bones:
             self.reporter.report(
                 type={'ERROR'}, 
-                message=f_("The bone '{bone}' has an invalid matrix ({matrix})", 
+                message=f_("The bone '{bone}' has an invalid matrix:\n{matrix}", 
                            bone=bone.name,
                            matrix=bone.matrix)
             )
-        return inverse
 
 # メニューに登録する関数
 def menu_func(self, context):
