@@ -476,7 +476,7 @@ class AnmBuilder:
         
         self.no_set_frame = False
         
-        self._invalid_bones: dict[bpy.types.PoseBone, list[tuple(float, Matrix)]] = []
+        self._invalid_bones: dict[bpy.types.PoseBone, list[tuple(float, Matrix)]] = {}
     
     def build_anm(self, context) -> Anm:
         obj = context.active_object
@@ -556,7 +556,7 @@ class AnmBuilder:
 
             time = (frame - self.frame_start) / fps * (1.0 / self.time_scale)
 
-            self._invalid_bones = []
+            self._invalid_bones = {}
             
             for bone in bones:
                 if bone.name not in anm_data_raw:
