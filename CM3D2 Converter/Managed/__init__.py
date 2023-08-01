@@ -48,14 +48,14 @@ def _add_references():
                 """Reference the specified dll"""
     else:
         import clr
-    from System.IO import FileLoadException
-    from System.Reflection import Assembly
+    from System.IO import FileLoadException  # type: ignore
+    from System.Reflection import Assembly  # type: ignore
     
     _sys.path.append(str(_MANAGED_DIR))
     
     try:
         clr.AddReference('CM3D2.Serialization')
         clr.AddReference('COM3D2.LiveLink')
-    except FileLoadException as ex:
+    except FileLoadException:  # type: ignore
         Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
         Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))

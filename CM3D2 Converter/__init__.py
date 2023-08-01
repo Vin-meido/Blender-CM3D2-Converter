@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CM3D2 Converter",
     "author": "@saidenka_cm3d2, @trzrz, @luvoid",
-    "version": ("luv", 2023, 7, "pre-30"),
+    "version": ("luv", 2023, 7, "pre-31"),
     "blender": (2, 80, 0),
     "location": "ファイル > インポート/エクスポート > CM3D2 Model (.model)",
     "description": "カスタムメイド3D2/カスタムオーダーメイド3D2専用ファイルのインポート/エクスポートを行います",
@@ -86,6 +86,7 @@ if True:
     from . import misc_RENDER_PT_render
     from . import misc_TEXTURE_PT_context_texture
     from . import misc_TEXT_HT_header
+    from . import misc_TEXT_MT_templates
     from . import misc_VIEW3D_MT_edit_mesh_merge
     from . import misc_VIEW3D_MT_edit_mesh_specials
     from . import misc_VIEW3D_MT_edit_mesh_split
@@ -110,14 +111,13 @@ for key, module in locals().copy().items():
 if 'bpy' in locals():
     import importlib
     for module in _SUB_MODULES:
-        print(f"Reload module {module}")
         try:
             importlib.reload(module)
         except ModuleNotFoundError:
             # module was renamed or moved
             pass
 
-import bpy, os.path, bpy.utils.previews
+import bpy, os.path, bpy.utils.previews  # type: ignore
 
 
 # アドオン設定
@@ -543,5 +543,9 @@ def unregister():
     translations.unregister(__name__)
 
 # メイン関数
-if __name__ == "__main__":
+if __name__ == '__main__':
     register()
+    
+# Make sure that this module is always accessible as 'cm3d2converter'
+import sys
+sys.modules['cm3d2converter'] = sys.modules[__name__]

@@ -13,8 +13,8 @@ from . fileutil import deserialize_from_file
 from . translations.pgettext_functions import *
 from . common import CM3D2ImportError
 
-from CM3D2.Serialization.Files import Anm
-from System import FormatException
+from CM3D2.Serialization.Files import Anm  # type: ignore
+from System import FormatException  # type: ignore
 
 
 # メインオペレーター
@@ -697,8 +697,8 @@ class AnmImporter:
         
         try:
             anm = deserialize_from_file(Anm, file)
-        except FormatException as ex:
-            raise CM3D2ImportError(ex.Message) from ex
+        except FormatException as ex:  # type: ignore
+            raise CM3D2ImportError(ex.Message) from ex  # type: ignore
         
         ext = anm.signature
         anm_version = anm.version

@@ -918,6 +918,18 @@ def remove_data(target_data):
     # 	if users and 'user_clear' in dir(data):
     # 		data.user_clear()
 
+    #for data in target_data:
+    #    for data_str in dir(bpy.data):
+    #        if not data_str.endswith('s'):
+    #            continue
+    #        try:
+    #            data_collection = getattr(bpy.data.actions, data_str)
+    #            if data.__class__.__name__ == data_collection[0].__class__.__name__:
+    #                data_collection.remove(data, do_unlink=True)
+    #                break
+    #        except:
+    #            pass
+    
     for data in target_data:
         for data_str in dir(bpy.data):
             if not data_str.endswith('s'):
@@ -1354,39 +1366,67 @@ def values_of_matched_keys(dict1, dict2):
 
 
 # luvoid : helper to easily get source and target objects
-def get_target_and_source_ob(context, copyTarget=False, copySource=False):
-    target_ob = None
-    source_ob = None
-    target_original_ob = None
-    source_original_ob = None
+def get_target_and_source_ob(context: bpy.context, copyTarget=False, copySource=False):
+    target_ob: bpy.types.Object = None
+    source_ob: bpy.types.Object = None
+    target_original_ob: bpy.types.Object = None
+    source_original_ob: bpy.types.Object = None
 
-    target_original_ob = context.object
+    selected_objects = list(context.selected_objects)
+    
+    target_original_ob = context.active_object
     if copyTarget:
         target_ob = target_original_ob.copy()
-        target_ob.data = target_original_ob.data.copy()
+        target_ob.data = target_ob.data.copy()
+        compat.link(context.scene, target_ob)
+        context.view_layer.update()
+        #bpy.ops.object.select_all(action='DESELECT')
+        #compat.set_select(target_original_ob, select=True)
+        #bpy.ops.object.duplicate()
+        #target_ob = context.active_object
     else:
         target_ob = target_original_ob
 
-    for ob in context.selected_objects:
+    for ob in selected_objects:
         if ob != target_ob:
             source_original_ob = ob
             break
     
     if copySource:
         source_ob = source_original_ob.copy()
-        source_ob.data = source_original_ob.data.copy()
+        new_data = source_original_ob.data.copy()
+        print(f"new_data = {new_data.shape_keys}")
+        source_ob.data = new_data
+        print(f"source_ob.data = {source_ob.data.shape_keys}")
+        compat.link(context.scene, source_ob)
+        context.view_layer.update()
+        #bpy.ops.object.select_all(action='DESELECT')
+        #compat.set_select(source_original_ob, select=True)
+        #bpy.ops.object.duplicate()
+        #print(f"duplicated_object = {context.active_object}")
+        #source_ob = context.active_object
     else:
         source_ob = source_original_ob
     
+    
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in selected_objects:
+        compat.set_select(obj, select=True)
+    
+    compat.set_active(context, target_ob)
+    compat.set_select(target_ob, select=True)
+    compat.set_select(source_ob, select=True)
     if copyTarget:
-        if copySource:
-            return target_ob, source_ob, target_original_ob, source_original_ob
-        else:
-            return target_ob, source_ob, target_original_ob
-    elif copySource:
-        return  target_ob, source_ob, source_original_ob
-    else:
-        return  target_ob, source_ob
+        compat.set_select(target_original_ob, select=False)
+    if copySource:
+        compat.set_select(source_original_ob, select=False)
+    
+    to_return = [target_ob, source_ob]
+    if copyTarget:
+        to_return.append(target_original_ob)
+    if copySource:
+        to_return.append(source_original_ob)
+    return tuple(to_return)
 
 
 # luvoid

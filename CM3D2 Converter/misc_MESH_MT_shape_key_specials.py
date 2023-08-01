@@ -4,6 +4,8 @@ import bpy
 import bmesh
 import mathutils
 import traceback
+from typing import TYPE_CHECKING
+import abc
 from . import common
 from . import compat
 from . import model_export
@@ -163,30 +165,36 @@ class transfer_shape_key_iter:
             #self.binded_shape_key_data.free()
 
 
+if TYPE_CHECKING:
+    _op_base = bpy.types.Operator
+else:
+    _op_base = object
 
-class shape_key_transfer_op:
+
+class shape_key_transfer_op(_op_base):
     is_first_remove_all = bpy.props.BoolProperty(name="最初に全シェイプキーを削除", default=True)
     is_remove_empty     = bpy.props.BoolProperty(name="変形のないシェイプキーを削除", default=True)
     is_bind_current_mix = bpy.props.BoolProperty(name="Bind to current source mix", default=False)
     subdivide_number    = bpy.props.IntProperty (name="参照元の分割", default=1, min=0, max=10, soft_min=0, soft_max=10)
 
-    target_ob = None
-    source_ob = None
-    og_source_ob = None
+    def __init__(self):
+        self.target_ob = None
+        self.source_ob = None
+        self.og_source_ob = None
 
-    _start_time = 0
-    _timer = None
-    
-    is_finished = False
-    is_canceled = False
+        self._start_time = 0
+        self._timer = None
+        
+        self.is_finished = False
+        self.is_canceled = False
 
-    pre_mode = None
-    pre_selected = None
+        self.pre_mode = None
+        self.pre_selected = None
+        self.pre_active = None
 
-    binded_shape_key = None
-    kd = None
-    is_shapeds = {}
-
+        self.binded_shape_key = None
+        self.kd = None
+        self.is_shapeds = {}
 
     def draw(self, context):
         self.layout.prop(self, 'is_first_remove_all', icon='ERROR'        )
@@ -196,43 +204,58 @@ class shape_key_transfer_op:
     
     def execute(self, context):
         self.pre_selected = list(context.selected_objects)
+        self.pre_mode = context.mode
+        
         self.target_ob, self.source_ob, self.og_source_ob = common.get_target_and_source_ob(context, copySource=True)
+        print(f"returned {self.source_ob.data.shape_keys}")
 
+        bpy.ops.object.mode_set(mode='OBJECT')
         compat.set_hide(self.og_source_ob, True)
 
         self._start_time = time.time()
         self._timer = None
         self.is_finished = False
         self.is_canceled = False
-        self.pre_mode = self.target_ob.mode
 
         self.binded_shape_key = None
         self.source_bind_data = None
         self.kd = None
         self.is_shapeds = {}
 
-        bpy.ops.object.mode_set(mode='OBJECT')
-
         try:
-            compat.link(context.scene, self.source_ob)
             self.prepare(context)
         
-        except:
+        except Exception as ex:
+            if not self.options.is_invoke:
+                #self.cleanup(context)
+                raise RuntimeError("Error while preparing shapekey transfer.")
             self.is_canceled = True
             traceback.print_exc()
             self.report(type={'ERROR'}, message="Error while preparing shapekey transfer.")
             self.cancel(context)
             return {'FINISHED'}
-
-        else:
+        
+        compat.set_active(context, self.target_ob)
+        
+        if self.options.is_invoke:
+            # run asynchronously
             wm = context.window_manager
             self._timer = wm.event_timer_add(1.0/60.0, window=context.window)
             wm.modal_handler_add(self)
             self.report(type={'INFO'}, message="Press ESC to cancel shape key transfer")
-        
-        compat.set_active(context, self.target_ob)
-        return {'RUNNING_MODAL'}
-
+            return {'RUNNING_MODAL'}
+        else:
+            # run synchronously
+            try:
+                while not self.is_finished:
+                    self.is_finished = self.loop(context)
+                self.finish(context)
+                return {'FINISHED'}
+            finally:
+                self.cleanup(context)
+                    
+                    
+            
     def modal(self, context, event):
         if event.type == 'ESC':
             self.is_canceled = 'WARNING'
@@ -271,7 +294,7 @@ class shape_key_transfer_op:
                 traceback.print_exc()
                 self.report(type={'ERROR'}, message="Error while finishing shapekey transfer.")
                 return {'PASS_THROUGH'}
-            else:
+            finally:
                 self.cleanup(context)
                 diff_time = time.time() - self._start_time
                 self.report(type={'INFO'}, message=f_tip_("{:.2f} Seconds", diff_time))
@@ -280,18 +303,25 @@ class shape_key_transfer_op:
     def prepare(self, context):
         target_ob = self.target_ob
         source_ob = self.source_ob
+        target_me: bpy.types.Mesh = self.target_ob.data
+        source_me: bpy.types.Mesh = self.source_ob.data
+        print(f"prepare source_me = {source_me}")
+        print(f"prepare source_me.shape_keys = {source_me.shape_keys}")
+        
 
-        for ob in self.pre_selected:
-            compat.set_select(ob, False)
+        bpy.ops.object.select_all(action='DESELECT')
 
         compat.set_active(context, source_ob)
+        compat.set_select(source_ob, select=True)
         #compat.set_select(source_og_ob, False)
         #compat.set_select(target_ob, False)
         
-        # transform source's mesh now so theres no need to worry about it later
-        matrix_source_to_target = compat.mul(target_ob.matrix_world.inverted_safe(), source_ob.matrix_world)
-        source_ob.data.transform(matrix_source_to_target, shape_keys=True)
-        source_ob.matrix_world = target_ob.matrix_world
+        if target_ob.matrix_world != source_ob.matrix_world:
+            print(f"prepare: transform")
+            # transform source's mesh now so theres no need to worry about it later
+            matrix_source_to_target = compat.mul(target_ob.matrix_world.inverted_safe(), source_ob.matrix_world)
+            source_me.transform(matrix_source_to_target, shape_keys=True)
+            source_ob.matrix_world = target_ob.matrix_world
 
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.reveal()
@@ -302,14 +332,15 @@ class shape_key_transfer_op:
         if self.is_first_remove_all:
             try:
                 target_ob.active_shape_key_index = 1
-                bpy.ops.object.shape_key_remove(all=True)
+                target_me.shape_keys = None
+                #bpy.ops.object.shape_key_remove(all=True)
             except:
                 pass
             finally:
                 target_ob.active_shape_key_index = 0
         else:
-            if target_ob.data.shape_keys:
-                for i, key in enumerate(target_ob.data.shape_keys.key_blocks):
+            if target_me.shape_keys:
+                for i, key in enumerate(target_me.shape_keys.key_blocks):
                     if i == 0:
                         continue
                     else:
@@ -317,9 +348,9 @@ class shape_key_transfer_op:
             target_ob.active_shape_key_index = 0
 
         if self.is_bind_current_mix:
-            source_basis = source_ob.data.shape_keys.key_blocks[0]
+            source_basis = source_me.shape_keys.key_blocks[0]
             
-            old_basis = target_ob.data.shape_keys and next(iter(target_ob.data.shape_keys.key_blocks), False) or target_ob.shape_key_add()
+            old_basis = target_me.shape_keys and next(iter(target_me.shape_keys.key_blocks), False) or target_ob.shape_key_add()
             old_basis.name = "__old_basis__" + old_basis.name
             new_basis = target_ob.shape_key_add(name=source_basis.name)
 
@@ -327,7 +358,7 @@ class shape_key_transfer_op:
             self.source_bind_data = self.binded_shape_key.data
             
             compat.set_active(context, target_ob)
-            target_ob.active_shape_key_index = target_ob.data.shape_keys.key_blocks.find(new_basis.name)
+            target_ob.active_shape_key_index = target_me.shape_keys.key_blocks.find(new_basis.name)
             # TOP指定でindex=1になるケースは、さらにもう一度UP
             bpy.ops.object.shape_key_move(type='TOP')
             if target_ob.active_shape_key_index == 1:
@@ -335,25 +366,29 @@ class shape_key_transfer_op:
             
             old_basis.relative_key = new_basis
             
-            source_ob.active_shape_key_index = source_ob.data.shape_keys.key_blocks.find(self.binded_shape_key.name)
+            source_ob.active_shape_key_index = source_me.shape_keys.key_blocks.find(self.binded_shape_key.name)
 
         else:
             source_ob.active_shape_key_index = 0
-            self.source_bind_data = source_ob.data.vertices
+            self.source_bind_data = source_me.vertices
 
         #print(len(source_ob.data.vertices), len(self.source_bind_data))
         self.kd = mathutils.kdtree.KDTree(len(self.source_bind_data))
+        print(f"prepare {source_me.shape_keys}")
         for index, vert in enumerate(self.source_bind_data):
             co = compat.mul(source_ob.matrix_world, vert.co)
             self.kd.insert(co, index)
         self.kd.balance()
 
-        for i, key in enumerate(source_ob.data.shape_keys.key_blocks):
+        for i, key in enumerate(source_me.shape_keys.key_blocks):
             if i == 0:
                 continue
             else:
                 key.value = 0.0
 
+    @abc.abstractmethod
+    def loop(self, context) -> bool | None: ...
+    
     def finish(self, context):
         target_me = self.target_ob.data
         
@@ -380,14 +415,13 @@ class shape_key_transfer_op:
         self.cleanup(context)
 
     def cleanup(self, context):
-        #compat.set_select(source_original_ob, True)
         if self.target_ob:
-            #compat.set_select(target_ob, True)
             compat.set_active(context, self.target_ob)
 
         if self.og_source_ob:
             compat.set_hide(self.og_source_ob, False)
 
+        print(f"Remove {self.source_ob}")
         source_me = self.source_ob and self.source_ob.data
         if source_me:
             common.remove_data([self.source_ob, source_me])
@@ -398,7 +432,7 @@ class shape_key_transfer_op:
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
 
-        if self.pre_mode:
+        if self.pre_mode and context.object:
             bpy.ops.object.mode_set(mode=self.pre_mode)
             
         if self.pre_selected:
@@ -451,7 +485,7 @@ class CNV_OT_quick_shape_key_transfer(shape_key_transfer_op, bpy.types.Operator)
         self.layout.prop(self, 'step_size')
 
     def prepare(self, context):
-        shape_key_transfer_op.prepare(self, context)
+        super().prepare(context)
 
         target_me = self.target_ob.data
         source_me = self.source_ob.data
@@ -641,7 +675,7 @@ class CNV_OT_precision_shape_key_transfer(shape_key_transfer_op, bpy.types.Opera
         return {'FINISHED'}
 
     def prepare(self, context):
-        shape_key_transfer_op.prepare(self, context)
+        super().prepare(context)
 
         target_me = self.target_ob.data
         source_me = self.source_ob.data
@@ -1553,7 +1587,7 @@ class CNV_OT_copy_shape_key_values(bpy.types.Operator):
 
     def execute(self, context):
         target_ob, source_ob = common.get_target_and_source_ob(context)
-            
+        
         source_sks = source_ob.data.shape_keys.key_blocks
         target_sks = target_ob.data.shape_keys.key_blocks
         for source_sk, target_sk in common.values_of_matched_keys(source_sks, target_sks):

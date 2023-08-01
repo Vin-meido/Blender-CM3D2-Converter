@@ -1,5 +1,5 @@
 # [API Documentation](https://luvoid.github.io/Blender-CM3D2-Converter/)
-[https://luvoid.github.io/Blender-CM3D2-Converter](https://luvoid.github.io/Blender-CM3D2-Converter/)
+[https://luvoid.github.io/Blender-CM3D2-Converter](https://luvoid.github.io/Blender-CM3D2-Converter/) ([Translated](https://luvoid-github-io.translate.goog/Blender-CM3D2-Converter/index.html?_x_tr_sl=auto&_x_tr_tl=default))
 
 # Blender-CM3D2-Converter
 　3Dアダルトゲーム「[カスタムメイド3D2](http://kisskiss.tv/cm3d2/)」「[カスタムオーダーメイド3D2](http://com3d2.jp/)」で使用されるモデルファイル形式(.model)を  

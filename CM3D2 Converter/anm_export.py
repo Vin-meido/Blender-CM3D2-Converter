@@ -16,9 +16,9 @@ from . translations.pgettext_functions import *
 from . fileutil import serialize_to_file
 from . import misc_DOPESHEET_MT_editor_menus
 
-from CM3D2.Serialization.Files import Anm
-from CM3D2.Serialization.Performance import PerformanceExtensions
-from System import Array
+from CM3D2.Serialization.Files import Anm  # type: ignore
+from CM3D2.Serialization.Performance import PerformanceExtensions  # type: ignore
+from System import Array  # type: ignore
 
 
 # メインオペレーター
