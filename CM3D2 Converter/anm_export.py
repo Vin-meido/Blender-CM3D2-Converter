@@ -1089,16 +1089,16 @@ class AnmBuilder:
             inverse = bone.matrix.inverted()
         except ValueError:
             if bone not in self._invalid_bones:
-                self._invalid_bones[bone] = []
-            self._invalid_bones[bone].append((frame, bone.matrix))
+                self._invalid_bones[bone.name] = []
+            self._invalid_bones[bone.name].append((frame, bone.matrix))
         return inverse
     
     def report_invalid_bones(self):
-        for bone, frames in self._invalid_bones.items():
+        for bone_name, frames in self._invalid_bones.items():
             self.reporter.report(
                 type={'ERROR'},
                 message=f_("The bone '{bone}' had an invalid matrix between frames {frame_from}-{frame_to} in animation:\n{matrix}", 
-                           bone=bone.name,
+                           bone=bone_name,
                            frame_from=frames[0][0],
                            frame_to=frames[-1][0],
                            matrix=frames[0][1])
