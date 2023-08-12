@@ -11,4 +11,5 @@ test/output
 stubs
 logs
 
-
+# These are files which should not be redistributed
+test/resources/hotdog.blend

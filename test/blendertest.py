@@ -53,13 +53,19 @@ class BlenderTestCase(TestCase):
         super().setUp()
         import bpy
         bpy.ops.wm.open_mainfile(filepath=self.blend_file_path)
-        #if not BlenderTestCase.is_cm3d2converter_registered:
-        #    cm3d2converter.register()
-        #    cm3d2converter.common.preferences().backup_ext = ''
-        #    BlenderTestCase.is_cm3d2converter_registere = True
+        if not BlenderTestCase.is_cm3d2converter_registered:
+            try:
+                import importlib
+                cm3d2converter = importlib.import_module(self.cm3d2converter_directory.name)
+                cm3d2converter.register()
+                cm3d2converter.common.preferences().backup_ext = ''
+            except:
+                pass
+            finally:
+                BlenderTestCase.is_cm3d2converter_registered = True
 
-    def assertArrayAlmostEqual(self, first: 'ArrayLike', second: 'ArrayLike', 
-                                rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
+    def assertArrayAlmostEqual(self, first: 'ArrayLike', second: 'ArrayLike', *,
+                               rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
         """Fail if the two arrays are not element-wise equal within a tolerance."""
         throw = False
 
@@ -72,25 +78,27 @@ class BlenderTestCase(TestCase):
             msg = f" : {msg}" if not msg is None else ""
             raise AssertionError(f"{first} != {second}" + msg)
 
-    def assertVectorAlmostEqual(self, first: 'Vector', second: 'Vector', 
+    def assertVectorAlmostEqual(self, first: 'Vector', second: 'Vector', *,
                                 rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
         """Fail if the two vectors are not element-wise equal within a tolerance."""
-        self.assertArrayAlmostEqual(first, second, rtol, atol, equal_nan, msg)
+        self.assertArrayAlmostEqual(first, second, rtol=rtol, atol=atol, equal_nan=equal_nan, msg=msg)
 
-    def assertQuaternionAlmostEqual(self, first: 'Quaternion', second: 'Quaternion', 
+    def assertQuaternionAlmostEqual(self, first: 'Quaternion', second: 'Quaternion', *,
                                 rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
         """Fail if the two quaternions are not element-wise equal within a tolerance."""
-        self.assertArrayAlmostEqual(first, second, rtol, atol, equal_nan, msg)
+        self.assertArrayAlmostEqual(first, second, rtol=rtol, atol=atol, equal_nan=equal_nan, msg=msg)
     
-    def assertMatrixAlmostEqual(self, first: 'Matrix', second: 'Matrix', 
+    def assertMatrixAlmostEqual(self, first: 'Matrix', second: 'Matrix', *,
                                 rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
         """Fail if the two quaternions are not element-wise equal within a tolerance."""
-        self.assertArrayAlmostEqual(first, second, rtol, atol, equal_nan, msg)
+        self.assertArrayAlmostEqual(first, second, rtol=rtol, atol=atol, equal_nan=equal_nan, msg=msg)
 
         
 class BlenderTest(BlenderTestCase):
     
     def test_register(self):
+        if BlenderTestCase.is_cm3d2converter_registered:
+            return
         import sys
         import importlib
         sys.path.append(self.cm3d2converter_directory.parent)
