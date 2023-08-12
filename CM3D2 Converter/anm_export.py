@@ -476,7 +476,7 @@ class AnmBuilder:
         
         self.no_set_frame = False
         
-        self._invalid_bones: dict[bpy.types.PoseBone, list[tuple(float, Matrix)]] = {}
+        self._invalid_bones: dict[bpy.types.PoseBone, list[tuple(float, Matrix)]] = dict()
     
     def build_anm(self, context) -> Anm:
         obj = context.active_object
@@ -555,8 +555,6 @@ class AnmBuilder:
                     layer.update()
 
             time = (frame - self.frame_start) / fps * (1.0 / self.time_scale)
-
-            self._invalid_bones = {}
             
             for bone in bones:
                 if bone.name not in anm_data_raw:
@@ -589,7 +587,11 @@ class AnmBuilder:
                         rot.w, rot.x, rot.y, rot.z = -rot.w, -rot.x, -rot.y, -rot.z
                 pre_rots[bone.name] = rot.copy()
                 
-                if not self.is_keyframe_clean or key_frame_index == 0 or key_frame_index == key_frame_count - 1:
+                if (not self.is_keyframe_clean 
+                    or key_frame_index == 0 
+                    or key_frame_index == key_frame_count - 1
+                    or len(anm_data_raw[bone.name].loc_dict) == 0):
+                    
                     anm_data_raw[bone.name].loc_dict[time] = loc.copy()
                     anm_data_raw[bone.name].rot_dict[time] = rot.copy()
                     anm_data_raw[bone.name].scl_dict[time] = scl.copy()
@@ -650,9 +652,10 @@ class AnmBuilder:
                     new_same_list, new_keydict = determine_new_keyframe(same_scls[bone.name].copy(), scl)
                     same_scls[bone.name] = new_same_list
                     anm_data_raw[bone.name].scl_dict.update(new_keydict)
-            
-            self.report_invalid_bones()
-                    
+        
+
+        self.report_invalid_bones()
+
         return anm_data_raw
 
     @staticmethod
@@ -1088,21 +1091,23 @@ class AnmBuilder:
         try:
             inverse = bone.matrix.inverted()
         except ValueError:
-            if bone not in self._invalid_bones:
+            if bone.name not in self._invalid_bones:
                 self._invalid_bones[bone.name] = []
-            self._invalid_bones[bone.name].append((frame, bone.matrix))
+            self._invalid_bones[bone.name].append((frame, bone.matrix.copy()))
         return inverse
     
     def report_invalid_bones(self):
+        print(self._invalid_bones)
         for bone_name, frames in self._invalid_bones.items():
             self.reporter.report(
                 type={'ERROR'},
-                message=f_("The bone '{bone}' had an invalid matrix between frames {frame_from}-{frame_to} in animation:\n{matrix}", 
+                message=f_("The bone '{bone}' had an invalid matrix during frames {frame_from} - {frame_to} in animation:\n{matrix}", 
                            bone=bone_name,
-                           frame_from=frames[0][0],
-                           frame_to=frames[-1][0],
+                           frame_from=int(frames[0][0]),
+                           frame_to=int(frames[-1][0]),
                            matrix=frames[0][1])
             )
+        self._invalid_bones = {}
 
 # メニューに登録する関数
 def menu_func(self, context):
