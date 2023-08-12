@@ -249,7 +249,7 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
 
 
     def execute(self, context):
-        ob = context.object
+        ob: bpy.types.Object = context.object
         arm_ob = ob.find_armature()
         if (not arm_ob) and (ob.parent and ob.parent.type == 'ARMATURE'):
             arm_ob = ob.parent
@@ -259,19 +259,19 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
         if self.bone_info_mode == 'ARMATURE':
             #bone_data = CNV_OT_export_cm3d2_model.armature_bone_data_parser(context, arm_ob)
             if not 'BaseBone' in arm_ob.data:
-                return bone_data_report_cancel()
+                return self.bone_data_report_cancel()
             base_bone_name = arm_ob.data['BaseBone']
         if self.bone_info_mode == 'TEXT':
             bone_data_text = context.blend_data.texts["BoneData"]
             if not 'BaseBone' in bone_data_text:
-                return bone_data_report_cancel()
+                return self.bone_data_report_cancel()
             base_bone_name = bone_data_text['BaseBone']
             bone_data = CNV_OT_export_cm3d2_model.bone_data_parser(l.body for l in bone_data_text.lines)
             local_bone_data = CNV_OT_export_cm3d2_model.local_bone_data_parser(l.body for l in bone_data_text.lines)
         elif self.bone_info_mode in ['OBJECT_PROPERTY', 'ARMATURE_PROPERTY']:
             target = ob if self.bone_info_mode == 'OBJECT_PROPERTY' else arm_ob.data
             if not 'BaseBone' in target:
-                return bone_data_report_cancel()
+                return self.bone_data_report_cancel()
             base_bone_name = target['BaseBone']
             bone_data = CNV_OT_export_cm3d2_model.bone_data_parser(CNV_OT_export_cm3d2_model.indexed_data_generator(target, prefix="BoneData:"))
             local_bone_data = CNV_OT_export_cm3d2_model.local_bone_data_parser(CNV_OT_export_cm3d2_model.indexed_data_generator(target, prefix="LocalBoneData:"))
@@ -281,9 +281,10 @@ class CNV_OT_align_to_cm3d2_base_bone(bpy.types.Operator):
             self.from_bone_data(ob, bone_data, local_bone_data, base_bone_name, self.scale)
         else:
             self.from_armature(ob, arm_ob.data, base_bone_name)
+        new_basis = ob.matrix_basis.copy()
 
-        if self.is_preserve_mesh:
-            new_basis = ob.matrix_basis.copy()
+        if self.is_preserve_mesh and new_basis != old_basis:
+            # This process can be lossy, so only perform if necessary
             ob.matrix_basis = compat.mul(new_basis.inverted(), old_basis)
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
             ob.matrix_basis = new_basis

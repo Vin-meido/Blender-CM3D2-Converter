@@ -15,6 +15,9 @@
     ```
     
     You can also use freely experiment inside the main() function.
+    
+    NOTE: Changes you make to this in the text editor won't take effect
+    when importing into other scripts, because this only a copy of the template.
 """
 import bpy
 from bpy.types import Object, Armature, Bone

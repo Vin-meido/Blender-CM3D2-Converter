@@ -31,10 +31,11 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
     version = bpy.props.EnumProperty(
         name="ファイルバージョン",
         items=[
-            ('2001', '2001', 'model version 2001 (available only for com3d2)', 'NONE', 0),
-            ('2000', '2000', 'model version 2000 (com3d2 version)', 'NONE', 1),
-            ('1000', '1000', 'model version 1000 (available for cm3d2/com3d2)', 'NONE', 2),
-        ], default='1000')
+            ('AUTO', 'Auto', 'determine model version from object properties', 'NONE', 0),
+            ('1000', '1000', 'model version 1000 (available for cm3d2/com3d2)', 'NONE', 1000),
+            ('2000', '2000', 'model version 2000 (com3d2 version)', 'NONE', 2000),
+            ('2001', '2001', 'model version 2001 (available only for com3d2)', 'NONE', 2001),
+        ], default='AUTO')
     model_name = bpy.props.StringProperty(name="model名", default="*")
     base_bone_name = bpy.props.StringProperty(name="基点ボーン名", default="*")
 
@@ -428,7 +429,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
         is_under_one = 0
         is_in_too_many = 0
         for i, vert in enumerate(me.vertices):
-            vgs = []
+            vgs: list[list[float]] = []
             for vg in vert.groups:
                 if len(ob.vertex_groups) <= vg.group: # Apparently a vertex can be assigned to a non-existent group.
                     continue
@@ -442,7 +443,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                     while boneindex >= 0:
                         parent = bone_data[boneindex]
                         localindex = local_bone_name_indices.get(parent['name'], -1)
-                        # could check for `localindex == -1` here, but it's prescence may be useful in determing if the local bones resolve back to some root
+                        # could check for `localindex == -1` here, 
+                        # but its prescence may be useful in determing if the local bones resolve back to some root
                         used_local_bone[localindex] = True
                         boneindex = parent['parent_index']
             if len(vgs) == 0:
@@ -454,8 +456,24 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             vgs = sorted(vgs, key=itemgetter(1), reverse=True)[0:4]
             total = sum(vg[1] for vg in vgs)
             if self.is_normalize_weight:
-                for vg in vgs:
-                    vg[1] /= total
+                if True:
+                    # This fixed threshold is tuned to leave body001.model unchanged
+                    if abs(total - 1) > 1e-6:
+                        for vg in vgs:
+                            vg[1] /= total
+                else: 
+                    # Alternative Technique
+                    # Floating-point-errors can accumulate over repeated imports/exports here
+                    # so perform the normalization in a copy
+                    vgs_temp = vgs.copy()
+                    for i, vg in enumerate(vgs_temp):
+                        vg_temp = vg.copy()
+                        vg_temp[1] /= total
+                        vgs_temp[i] = vg_temp
+                    total_temp = sum(vg_temp[1] for vg_temp in vgs_temp)
+                    # Only apply the normalization if it brings the sum closer to 1
+                    if abs(total_temp - 1) < abs(total - 1):
+                        vgs = vgs_temp
             else:
                 if 1.01 < total:
                     is_over_one += 1
@@ -518,14 +536,17 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         return {'FINISHED'}
 
-    def write_model(self, context, ob, writer, bone_data=[], local_bone_data=[], vertices=[]):
+    def write_model(self, context, ob: bpy.types.Object, writer, bone_data=[], local_bone_data=[], vertices=[]):
         """モデルデータをファイルオブジェクトに書き込む"""
         me = ob.data
         prefs = common.preferences()
 
         # ファイル先頭
         common.write_str(writer, 'CM3D2_MESH')
-        self.version_num = int(self.version)
+        if self.version == 'AUTO':
+            self.version_num = max(ob.get("ModelVersion", 1000), 1000)
+        else:
+            self.version_num = int(self.version)
         writer.write(struct.pack('<i', self.version_num))
 
         common.write_str(writer, self.model_name)
