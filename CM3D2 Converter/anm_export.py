@@ -1099,8 +1099,8 @@ class AnmBuilder:
                 type={'ERROR'},
                 message=f_("The bone '{bone}' had an invalid matrix between frames {frame_from}-{frame_to} in animation:\n{matrix}", 
                            bone=bone.name,
-                           frame_min=frames[0][0],
-                           frame_max=frames[-1][0],
+                           frame_from=frames[0][0],
+                           frame_to=frames[-1][0],
                            matrix=frames[0][1])
             )
 
