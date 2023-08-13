@@ -2,7 +2,7 @@ import numpy as np
 from unittest import TestCase
 from pathlib import Path
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     import bpy
@@ -64,6 +64,13 @@ class BlenderTestCase(TestCase):
             finally:
                 BlenderTestCase.is_cm3d2converter_registered = True
 
+    def assertOperatorFinished(self, result: set[Literal['RUNNING_MODAL', 'CANCELLED', 'FINISHED', 'PASS_THROUGH']],
+                               msg=None):
+        if 'FINISHED' not in result:
+            msg = f" : {msg}" if not msg is None else ""
+            self.fail(f"Operator did not finish (returned {result})" + msg)
+        
+    
     def assertArrayAlmostEqual(self, first: 'ArrayLike', second: 'ArrayLike', *,
                                rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
         """Fail if the two arrays are not element-wise equal within a tolerance."""
@@ -76,7 +83,7 @@ class BlenderTestCase(TestCase):
 
         if throw:
             msg = f" : {msg}" if not msg is None else ""
-            raise AssertionError(f"{first} != {second}" + msg)
+            self.fail(f"{first} != {second}" + msg)
 
     def assertVectorAlmostEqual(self, first: 'Vector', second: 'Vector', *,
                                 rtol=1.e-5, atol=1.e-8, equal_nan=False, msg=None):
@@ -93,7 +100,7 @@ class BlenderTestCase(TestCase):
         """Fail if the two quaternions are not element-wise equal within a tolerance."""
         self.assertArrayAlmostEqual(first, second, rtol=rtol, atol=atol, equal_nan=equal_nan, msg=msg)
 
-        
+    
 class BlenderTest(BlenderTestCase):
     
     def test_register(self):

@@ -55,6 +55,7 @@ class AnmTestCase(BlenderTestCase):
                                  allow_missing_bones=allow_missing_bones,
                                  msg=f"@ frame {frame}" + msg)
 
+
 class AnmTest(AnmTestCase):
     def test_anm_import(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
@@ -80,16 +81,16 @@ class AnmTest(AnmTestCase):
         out_file_2 = f'{self.output_dir}/{self._testMethodName}_2.anm'
 
         bpy.ops.import_anim.import_cm3d2_anm(filepath=in_file)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0, is_scale=True)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_0)
 
         bpy.ops.object.duplicate()
         body001_armature_copy: bpy.types.Object = bpy.data.objects.get('body001.body.armature.001')
         self.activate_object(body001_armature_copy)
 
         bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_0)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_1, is_scale=True)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_1)
         bpy.ops.import_anim.import_cm3d2_anm(filepath=out_file_1)
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_2, is_scale=True)
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file_2)
 
         with open(in_file, 'rb') as reader:
             expected_data = reader.read()
@@ -235,13 +236,14 @@ class HotdogAnmTest(AnmTestCase):
         hotdog_armature_object: bpy.types.Object = bpy.data.objects.get('hotdog 아마튜어')
         self.activate_object(hotdog_armature_object)
 
-        bpy.ops.export_anim.export_cm3d2_anm(filepath=f'{self.output_dir}/{self._testMethodName}.anm')
+        bpy.ops.export_anim.export_cm3d2_anm(filepath=f'{self.output_dir}/{self._testMethodName}.ex.anm', 
+                                             is_scale=True)
 
     def test_hotdog_reimport(self):
         hotdog_armature_object: bpy.types.Object = bpy.data.objects.get('hotdog 아마튜어')
         self.activate_object(hotdog_armature_object)
 
-        out_file = f'{self.output_dir}/{self._testMethodName}.anm'
+        out_file = f'{self.output_dir}/{self._testMethodName}.ex.anm'
 
         bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file, is_scale=True)
         

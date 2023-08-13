@@ -30,7 +30,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     bl_options = {'REGISTER'}
 
     filepath = bpy.props.StringProperty(subtype='FILE_PATH')
-    filename_ext = '.ex.anm'
+    filename_ext = '.anm'
     filter_glob = bpy.props.StringProperty(default='*.anm', options={'HIDDEN'})
 
     scale = bpy.props.FloatProperty(name="倍率", default=0.2, min=0.1, max=100, soft_min=0.1, soft_max=100, step=100, precision=1, description="エクスポート時のメッシュ等の拡大率です")
@@ -45,7 +45,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     ]
     export_method = bpy.props.EnumProperty(items=items, name="Export Method", default='ALL')
 
-    
+
     frame_start = bpy.props.IntProperty(name="開始フレーム", default=0, min=0, max=99999, soft_min=0, soft_max=99999, step=1)
     frame_end = bpy.props.IntProperty(name="最終フレーム", default=0, min=0, max=99999, soft_min=0, soft_max=99999, step=1)
     key_frame_count = bpy.props.IntProperty(name="キーフレーム数", default=-1, min=-1, max=99999, soft_min=1, soft_max=99999, step=1)
@@ -62,7 +62,7 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
     
     is_location = bpy.props.BoolProperty(name="Export Location"  , default=True )
     is_rotation = bpy.props.BoolProperty(name="Export Rotation"  , default=True )
-    is_scale    = bpy.props.BoolProperty(name="Export Scale (Ex)", default=True)
+    is_scale    = bpy.props.BoolProperty(name="Export Scale (Ex)", default=False)
 
     is_remove_unkeyed_bone       = bpy.props.BoolProperty(name="Remove Unkeyed Bones", default=False)
     is_remove_alone_bone         = bpy.props.BoolProperty(name="親も子も存在しない", default=True)
@@ -87,9 +87,9 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
             action_name = common.remove_serial_number(ob.animation_data.action.name)
 
         if prefs.anm_default_path:
-            self.filepath = common.default_cm3d2_dir(prefs.anm_default_path, action_name, 'ex.anm')
+            self.filepath = common.default_cm3d2_dir(prefs.anm_default_path, action_name, self.filename_ext)
         else:
-            self.filepath = common.default_cm3d2_dir(prefs.anm_export_path, action_name, 'ex.anm')
+            self.filepath = common.default_cm3d2_dir(prefs.anm_export_path, action_name, self.filename_ext)
         self.frame_start = context.scene.frame_start
         self.frame_end = context.scene.frame_end
         self.scale = 1.0 / prefs.scale
@@ -148,22 +148,47 @@ class CNV_OT_export_cm3d2_anm(bpy.types.Operator):
         column.prop(self, 'is_remove_serial_number_bone', icon='SEQUENCE'               )
         column.prop(self, 'is_remove_japanese_bone'     , icon=compat.icon('HOLDOUT_ON'))
         
-        is_ex_anm = self.is_scale
-        path = Path(self.filepath)
-        if is_ex_anm:
-            if not path.stem.endswith('.ex'):
-                self.filepath = str(path.with_stem(path.stem + '.ex'))
-        else:
-            if path.stem.endswith('.ex'):
-                self.filepath = str(path.with_stem(path.stem.removesuffix('.ex')))
+        file_select_params: bpy.types.FileSelectParams = None
+        try:
+            file_select_params = context.screen.areas[0].spaces[0].params
+            if not isinstance(file_select_params, bpy.types.FileSelectParams):
+                file_select_params = None
+        except:
+            pass
+        
+        if file_select_params is not None:
+            path = Path(file_select_params.filename)
+            if self.is_ex_anm:
+                if path.suffix == '.anm' and not path.stem.endswith('.ex'):
+                    path = path.with_stem(path.stem + '.ex')
+            else:
+                if path.suffix == '.anm' and path.stem.endswith('.ex'):
+                    path = path.with_stem(path.stem.removesuffix('.ex'))
+            file_select_params.filename = str(path)
 
+    @property
+    def is_ex_anm(self) -> bool:
+        return self.is_scale
+    
     def execute(self, context):
+        
+        # Don't allow exporting extended animation as '.anm' instead of '.ex.anm'
+        if self.is_ex_anm and self.filepath.endswith('.anm') and not self.filepath.endswith('.ex.anm'):
+            self.report(
+                type={'ERROR'}, 
+                message=f_tip_("Blocked attempt to export extended animation as '.anm', use '.ex.anm' instead")
+            )
+            return {'CANCELLED'}
+        
         common.preferences().anm_export_path = self.filepath
 
         try:
             file = common.open_temporary(self.filepath, 'wb', is_backup=self.is_backup)
         except:
-            self.report(type={'ERROR'}, message=f_tip_("ファイルを開くのに失敗しました、アクセス不可かファイルが存在しません。file={}", self.filepath))
+            self.report(
+                type={'ERROR'}, 
+                message=f_tip_("ファイルを開くのに失敗しました、アクセス不可かファイルが存在しません。file={}", self.filepath)
+            )
             return {'CANCELLED'}
 
         try:
@@ -745,14 +770,19 @@ class AnmBuilder:
                 
                 pose_bone = pose.bones[bone_name]
                 rna_data_path = f'pose.bones["{bone_name}"].{prop}'
-                prop_fcurves = [ fcurves.find(rna_data_path, index=axis_index) for axis_index in range(prop_sizes[prop]) ]
+                prop_fcurves = [ fcurves.find(rna_data_path, index=axis_index) 
+                                 for axis_index in range(prop_sizes[prop]) ]
                 
                 # Create missing fcurves, and make existing fcurves CM3D2 compatible.
                 for axis_index, fcurve in enumerate(prop_fcurves):
                     if not fcurve:
                         fcurve = fcurves.new(rna_data_path, index=axis_index, action_group=pose_bone.name)
                         prop_fcurves[axis_index] = fcurve
-                        self.report(type={'WARNING'}, message=f_tip_("Creating missing FCurve for {path}[{index}]", path=rna_data_path, index=axis_index))
+                        self.report(
+                            type={'WARNING'}, 
+                            message=f_tip_("Creating missing FCurve for {path}[{index}]", 
+                                           path=rna_data_path, index=axis_index)
+                        )
                     else:
                         override = context.copy()
                         override['active_editable_fcurve'] = fcurve
@@ -781,7 +811,11 @@ class AnmBuilder:
                                 value         = fcurve.evaluate(frame), 
                                 options       = {'NEEDED', 'FAST'}                        
                             )
-                            self.report(type={'WARNING'}, message=f_tip_("Creating missing keyframe @ frame {frame} for {path}[{index}]", path=rna_data_path, index=axis_index, frame=frame))
+                            self.report(
+                                type={'WARNING'},
+                                message=f_tip_("Creating missing keyframe @ frame {frame} for {path}[{index}]",
+                                               path=rna_data_path, index=axis_index, frame=frame)
+                            )
                 
                 for fcurve in prop_fcurves:
                     fcurve.update()
@@ -1100,7 +1134,7 @@ class AnmBuilder:
         print(self._invalid_bones)
         for bone_name, frames in self._invalid_bones.items():
             self.reporter.report(
-                type={'ERROR'},
+                type={'WARNING'},
                 message=f_("The bone '{bone}' had an invalid matrix during frames {frame_from} - {frame_to} in animation:\n{matrix}", 
                            bone=bone_name,
                            frame_from=int(frames[0][0]),

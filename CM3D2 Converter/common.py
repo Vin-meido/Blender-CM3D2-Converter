@@ -472,7 +472,8 @@ def get_com3d2_dir():
 
 
 # CM3D2のインストールフォルダを取得＋α
-def default_cm3d2_dir(base_dir, file_name, new_ext):
+def default_cm3d2_dir(base_dir: str, file_name: str, new_ext: str):
+    new_ext = new_ext.strip('.')
     if not base_dir:
         prefs = preferences()
         if prefs.cm3d2_path:
