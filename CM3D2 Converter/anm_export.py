@@ -8,6 +8,7 @@ import time
 import bpy
 import bmesh
 import mathutils
+import numpy as np
 from mathutils import Vector, Quaternion, Matrix
 from pathlib import Path
 from . import common
@@ -543,20 +544,6 @@ class AnmBuilder:
             @property
             def scl_dict(self) -> dict[float, Vector]:
                 return self['SCL']
-
-        class KeyFrame:
-            def __init__(self, time, value, slope=None):
-                self.time = time
-                self.value: Vector | Quaternion = value
-                if slope:
-                    self.slope = slope
-                elif type(value) == Vector:
-                    self.slope = Vector.Fill(len(value))
-                elif type(value) == Quaternion:
-                    self.slope = Quaternion((0,0,0,0))
-                else:
-                    self.slope = 0
-
         
         key_frame_count = self.key_frame_count
         if key_frame_count == -1:
@@ -627,36 +614,7 @@ class AnmBuilder:
                         same_scls[bone.name].append(KeyFrame(time, scl.copy()))
                 else:
                     
-                    def determine_new_keyframe(same_list: list[KeyFrame], current_value: Vector | Quaternion):
-                        prev_keyframe = same_list[-1]
-                        a = prev_keyframe.value - current_value
-                        b = prev_keyframe.slope
-                        
-                        length = 1
-                        if isinstance(current_value, Vector):
-                            length = 3
-                        elif isinstance(current_value, Quaternion):
-                            length = 4
-                            
-                        is_mismatch = False
-                        for i in range(length):
-                            if self.check_is_mismatch(a[i], b[i]):
-                                is_mismatch = True
-                                break
-                        
-                        new_keydict: dict[float, Vector | Quaternion] = {}
-                        if is_mismatch:
-                            if 2 <= len(same_list):
-                                new_keydict[prev_keyframe.time] = prev_keyframe.value.copy()
-                                # anm_data_raw[bone.name]['LOC'][prev_keyframe.time] = prev_keyframe.value.copy()
-                            new_keydict[time] = current_value.copy()
-                            # anm_data_raw[bone.name]['LOC'][time] = current_value.copy()
-                            same_list = [KeyFrame(time, current_value.copy(), a.copy())] # update last position and slope
-                        else:
-                            same_list.append(KeyFrame(time, current_value.copy(), b.copy())) # update last position, but not last slope
-                        return same_list, new_keydict
-                    
-                    new_same_list, new_keydict = determine_new_keyframe(same_locs[bone.name].copy(), loc)
+                    new_same_list, new_keydict = self.determine_new_keyframe(time, same_locs[bone.name].copy(), loc)
                     same_locs[bone.name] = new_same_list
                     anm_data_raw[bone.name].loc_dict.update(new_keydict)
                     
@@ -670,11 +628,11 @@ class AnmBuilder:
                     #else:
                     #    same_rots[bone.name].append(KeyFrame(time, rot.copy(), b.copy())) # update last position, but not last slope
 
-                    new_same_list, new_keydict = determine_new_keyframe(same_rots[bone.name].copy(), rot)
+                    new_same_list, new_keydict = self.determine_new_keyframe(time, same_rots[bone.name].copy(), rot)
                     same_rots[bone.name] = new_same_list
                     anm_data_raw[bone.name].rot_dict.update(new_keydict)
                     
-                    new_same_list, new_keydict = determine_new_keyframe(same_scls[bone.name].copy(), scl)
+                    new_same_list, new_keydict = self.determine_new_keyframe(time, same_scls[bone.name].copy(), scl)
                     same_scls[bone.name] = new_same_list
                     anm_data_raw[bone.name].scl_dict.update(new_keydict)
         
@@ -682,11 +640,66 @@ class AnmBuilder:
         self.report_invalid_bones()
 
         return anm_data_raw
-
-    @staticmethod
-    def check_is_mismatch(a, b):
-        return 0.000001 < abs(a - b)
-
+    
+    def determine_new_keyframe(self, time: float, same_list: list[KeyFrame], current_value: Vector | Quaternion):
+        """Determine if a new keyframe should be added
+        based on how different the previous frames are from the current frames.
+        
+        This functuon directly modifies same_list
+        """
+        prev_keyframe = same_list[-1]
+        current_value = current_value.copy()
+        a = prev_keyframe.value - current_value
+        b = prev_keyframe.slope
+        
+        #length = 1
+        #if isinstance(current_value, Vector):
+        #    length = 3
+        #elif isinstance(current_value, Quaternion):
+        #    length = 4
+        #is_mismatch = False
+        #for i in range(length):
+        #    a_i = a[i]
+        #    b_i = b[i]
+        #    if 1e-6 < abs(a[i] - b[i]):
+        #        is_mismatch = True
+        #        break
+        
+        #is_mismatch = not np.allclose(a, b, atol=1e-6)
+        
+        diff = a - b
+        if isinstance(current_value, Vector):
+            is_mismatch = (   diff.x >= 1e-6
+                           or diff.y >= 1e-6
+                           or diff.z >= 1e-6)
+        elif isinstance(current_value, Quaternion):
+            is_mismatch = (   diff.x >= 1e-6
+                           or diff.y >= 1e-6
+                           or diff.z >= 1e-6
+                           or diff.w >= 1e-6)
+        else:
+            is_mismatch = diff >= 1e-6
+        
+        new_keydict: dict[float, Vector | Quaternion] = {}
+        if is_mismatch:
+            if len(same_list) >= 2:
+                new_keydict[prev_keyframe.time] = prev_keyframe.value.copy()
+                # anm_data_raw[bone.name]['LOC'][prev_keyframe.time] = prev_keyframe.value.copy()
+            new_keydict[time] = current_value
+            # anm_data_raw[bone.name]['LOC'][time] = current_value.copy()
+            same_list = [KeyFrame(time, current_value, a)] # update last position and slope
+        else:
+            # update last position, but not last slope
+            if len(same_list) >= 2:
+                # Only the first and last elements are ever used, 
+                # so just overwrite the last element.
+                # This is a HUGE time-save.
+                same_list[-1].time = time
+                same_list[-1].value = current_value
+            else:
+                same_list.append(KeyFrame(time, current_value, b.copy())) 
+        return same_list, new_keydict
+    
     def get_animation_keyframes(self, context, pose, keyed_bones, fcurves):
         fps = context.scene.render.fps
         
@@ -1142,6 +1155,23 @@ class AnmBuilder:
                            matrix=frames[0][1])
             )
         self._invalid_bones = {}
+
+
+class KeyFrame:
+    __slots__ = 'time', 'value', 'slope'
+    
+    def __init__(self, time, value, slope=None):
+        self.time = time
+        self.value: Vector | Quaternion = value
+        if slope:
+            self.slope = slope
+        elif type(value) == Vector:
+            self.slope = Vector.Fill(len(value))
+        elif type(value) == Quaternion:
+            self.slope = Quaternion((0,0,0,0))
+        else:
+            self.slope = 0
+
 
 # メニューに登録する関数
 def menu_func(self, context):
