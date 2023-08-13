@@ -30,7 +30,10 @@ class BlenderTestCase(TestCase):
 
     @property
     def output_dir(self) -> str:
-        return str(Path(__file__).parent / 'output')
+        path = Path(__file__).parent / 'output' / self.__class__.__name__
+        if not path.exists():
+            path.mkdir(parents=True)
+        return str(path)
 
     @staticmethod
     def activate_object(obj: 'bpy.types.Object'):

@@ -7,6 +7,8 @@ import profile
 
 import cm3d2converter  # If not imported, call stack is missing
 
+from blenderunittest import BlenderTestCase
+
 from cProfile import Profile
 from line_profiler import LineProfiler as _LineProfiler
 
@@ -82,9 +84,9 @@ class ProfileLog(cProfile.Profile):
         stats.dump_stats(self._out_path)
 
 
-def dump_test_stats(test_name: str, *profs):
-    out_dir = Path(__file__).parent / 'output'
-    out_path = (out_dir / test_name).with_suffix('.prof')
+def dump_test_stats(test_case: BlenderTestCase, *profs):
+    out_dir = Path(test_case.output_dir)
+    out_path = (out_dir / test_case._testMethodName).with_suffix('.prof')
     line_out_path = out_path.with_suffix('.lprof')
     
     stats = pstats.Stats()

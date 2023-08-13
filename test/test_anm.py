@@ -1,8 +1,8 @@
 import bpy
 from mathutils import Vector, Quaternion
 
-from blendertest import BlenderTestCase
-from profile_helpers import dump_test_stats, Profile, LineProfile
+from blenderunittest import BlenderTestCase
+from profilehelpers import dump_test_stats, Profile, LineProfile
 
 import cm3d2converter
 
@@ -129,7 +129,7 @@ class AnmTest(AnmTestCase):
 
         prof.disable()
 
-        dump_test_stats(self._testMethodName, prof, lineprof)
+        dump_test_stats(self, prof, lineprof)
 
     def testprofile_anm_export(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
@@ -153,7 +153,7 @@ class AnmTest(AnmTestCase):
 
         bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
 
-        dump_test_stats(self._testMethodName, prof, lineprof)  
+        dump_test_stats(self, prof, lineprof)
 
     def testprofile_anm_export_with_warmup(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
@@ -178,7 +178,7 @@ class AnmTest(AnmTestCase):
 
         bpy.ops.export_anim.export_cm3d2_anm(filepath=out_file)
 
-        dump_test_stats(self._testMethodName, prof, lineprof)
+        dump_test_stats(self, prof, lineprof)
 
     def test_exanm(self):
         body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
@@ -224,6 +224,41 @@ class AnmTest(AnmTestCase):
             self.assertAlmostEqual(loc_diff.magnitude * 0.01, 0, 1, msg=f"loc of {bone.name} expected {loc_expected}, got {loc_actual}")
             self.assertAlmostEqual(rot_diff.magnitude * 0.01, 0, 1, msg=f"rot of {bone.name} expected {rot_expected}, got {rot_actual}")
             self.assertAlmostEqual(scl_diff.magnitude * 0.01, 0, 1, msg=f"scl of {bone.name} expected {scl_expected}, got {scl_actual}")
+
+
+class LongAnmTest(AnmTestCase):
+    def test_long_anm(self):
+        """There may be a bug where exporting an animation with 
+        many frames will cause Blender to freeze
+        """
+        body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
+        self.activate_object(body001_armature_object)
+        
+        bpy.ops.export_anim.export_cm3d2_anm(
+            filepath=f'{self.output_dir}/{self._testMethodName}.anm',
+            is_backup=False,
+            frame_start=1,
+            frame_end=4000,
+        )
+        
+    def testprofile_long_anm(self):
+        body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
+        self.activate_object(body001_armature_object)
+        
+        lineprof = LineProfile()
+        lineprof.add_module(cm3d2converter.anm_export)
+        prof = Profile()
+        lineprof.enable()
+        prof.enable()
+        
+        bpy.ops.export_anim.export_cm3d2_anm(
+            filepath=f'{self.output_dir}/{self._testMethodName}.anm',
+            is_backup=False,
+            frame_start=1,
+            frame_end=7200,
+        )
+        
+        dump_test_stats(self, prof, lineprof)
 
 
 class HotdogAnmTest(AnmTestCase):

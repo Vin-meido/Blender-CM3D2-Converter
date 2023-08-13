@@ -1,7 +1,7 @@
 import bpy
 from pathlib import Path
 
-from blendertest import BlenderTestCase
+from blenderunittest import BlenderTestCase
 
 
 class ModelTest(BlenderTestCase):

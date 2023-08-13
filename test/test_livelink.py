@@ -3,8 +3,8 @@ import subprocess
 import os
 from pathlib import Path
 
-from blendertest import BlenderTestCase
-from profile_helpers import ProfileLog
+from blenderunittest import BlenderTestCase
+from profilehelpers import ProfileLog
 
 import cm3d2converter
 
