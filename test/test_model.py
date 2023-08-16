@@ -178,3 +178,10 @@ class ModelTest(BlenderTestCase):
         fullweight_mesh_object = bpy.context.object
         self.assertEqual(1, fullweight_mesh_object.vertex_groups.active.weight(0),
                          "Weights were not normalized when is_normalize_weight=True")
+
+class Dress379Test(BlenderTestCase):
+    def test_model_import_dress379(self):
+        """Historically caused KeyError in model_import.write_vertex_colors caused by loose vertices."""
+        in_file = f'{self.resources_dir}/Dress379_wear.model'
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=in_file)
+

@@ -11,5 +11,6 @@ test/output
 stubs
 logs
 
-# These are files which should not be redistributed
+# These files are used for testing, but cannot be redistributed 
 test/resources/hotdog.blend
+test/resources/dress379_wear.model
