@@ -255,12 +255,23 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
 
                 # マテリアル情報読み込み
                 # TODO MaterialHandlerに変更
+                material_names = {}
                 material_data = []
                 material_count = struct.unpack('<i', reader.read(4))[0]
                 for i in range(material_count):
                     print(f_("mate count: {num} of {count} @ 0x{pos:02X}", num=i, count=material_count, pos=reader.tell()))
                     data = cm3d2_data.MaterialHandler.read(reader, read_header=False, version=model_ver)
-                    data.name1 = data.name.lower()
+                    
+                    if data.name.lower() in material_names:
+                        print(f"duplicate material name found! {data.name.lower()}")
+                        material_names[data.name.lower()] += 1
+                        new_name = data.name.lower() + "_" + str(material_names.get(data.name.lower()))
+                        data.name1 = new_name
+                    else:
+                        data.name1 = data.name.lower()
+                        material_names[data.name1] = 1
+
+                    #data.name1 = data.name.lower()
                     material_data.append(data)
                     
                     # name1 = common.read_str(reader)
@@ -672,10 +683,24 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             override = context.copy()
             override['object'] = ob
             prefs = common.preferences()
+            data_names_map = {}
+            
             for index, data in enumerate(material_data):
                 print(f_("material count: {num} of {count}", num=index, count=material_count))
+
+                print("    name: " + data.name)
+                if data.name not in data_names_map:
+                    data_names_map[data.name] = 1
+                else:
+                    data_names_map[data.name] += 1
+                    print(f"duplicate material name found! {data.name}")
+                    data.name = data.name + "_" + str(data_names_map.get(data.name))
+
+                # may not be needed
                 if prefs.mate_unread_same_value and data.name in mates_set:
                     continue
+                #####################
+                
                 mates_set.add(data.name)
                 #common.preferences().mate_unread_same_value
                 bpy.ops.object.material_slot_add(override)
