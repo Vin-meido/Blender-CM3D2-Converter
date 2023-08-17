@@ -681,22 +681,9 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
             override = context.copy()
             override['object'] = ob
             prefs = common.preferences()
-            data_names_map = {}
             
             for index, data in enumerate(material_data):
                 print(f_("material count: {num} of {count}", num=index, count=material_count))
-
-                print("    name: " + data.name)
-                if data.name in data_names_map:
-                    data_names_map[data.name] += 1
-                    print(f"duplicate material name found! {data.name}")
-                    data.name = data.name + "_" + str(data_names_map.get(data.name))
-                data_names_map[data.name] = 1
-
-                # may not be needed
-                if prefs.mate_unread_same_value and data.name in mates_set:
-                    continue
-                #####################
                 
                 mates_set.add(data.name)
                 #common.preferences().mate_unread_same_value

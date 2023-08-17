@@ -1,7 +1,9 @@
 import bpy
 from pathlib import Path
 
+import cm3d2converter
 from blenderunittest import BlenderTestCase
+
 
 
 class ModelTest(BlenderTestCase):
@@ -179,9 +181,70 @@ class ModelTest(BlenderTestCase):
         self.assertEqual(1, fullweight_mesh_object.vertex_groups.active.weight(0),
                          "Weights were not normalized when is_normalize_weight=True")
 
+
 class Dress379Test(BlenderTestCase):
     def test_model_import_dress379(self):
         """Historically caused KeyError in model_import.write_vertex_colors caused by loose vertices."""
         in_file = f'{self.resources_dir}/Dress379_wear.model'
         bpy.ops.import_mesh.import_cm3d2_model(filepath=in_file)
 
+
+class DuplicateMaterialsTest(BlenderTestCase):
+    """Material slots can be lost / deleted when importing a model 
+    containing materials with the same name"""
+    
+    def test_duplicate_materials_import(self):
+        """Test that all materials are imported"""
+        in_file = f'{self.resources_dir}/duplicate_materials.model'
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=in_file)
+        
+        # This model has exactly three materials
+        self.assertEqual(len(bpy.context.object.material_slots), 3, 
+                         "Not all materials were imported")
+        
+    def test_duplicate_materials_recursive(self):
+        """Test that all materials are present after importing and exporting
+        then importing again"""
+        in_file = f'{self.resources_dir}/duplicate_materials.model'
+        out_file = f'{self.output_dir}/{self._testMethodName}.model'
+        
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=in_file)
+        bpy.ops.export_mesh.export_cm3d2_model(filepath=out_file)
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=out_file)
+        
+        # This model has exactly three materials
+        self.assertEqual(len(bpy.context.object.material_slots), 3, 
+                         "Not all materials were imported")
+        
+    def test_duplicate_material_names_preserved(self):
+        """Test that the names of the materials are preserved after repeated
+        import and exports"""
+        in_file = f'{self.resources_dir}/duplicate_materials.model'
+        out_file_0 = f'{self.output_dir}/{self._testMethodName}_0.model'
+        out_file_1 = f'{self.output_dir}/{self._testMethodName}_1.model'
+        
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=in_file)
+        for ms in bpy.context.object.material_slots.values():
+            ms: bpy.types.MaterialSlot
+            ms.material = bpy.data.materials['cube_material']
+        expected_names = [cm3d2converter.common.remove_serial_number(k) 
+                          for k in bpy.context.object.material_slots.keys()]
+        
+        bpy.ops.export_mesh.export_cm3d2_model(filepath=out_file_0)
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=out_file_0)
+        imported_names = [cm3d2converter.common.remove_serial_number(k) 
+                          for k in bpy.context.object.material_slots.keys()]
+        self.assertListEqual(expected_names, imported_names,
+                             "Material names were changed after first export / import")
+            
+        bpy.ops.export_mesh.export_cm3d2_model(filepath=out_file_1)
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=out_file_1)
+        imported_names = [cm3d2converter.common.remove_serial_number(k) 
+                          for k in bpy.context.object.material_slots.keys()]
+        self.assertListEqual(expected_names, imported_names,
+                             "Material names were changed after first export / import")
+        print(imported_names)
+        
+        
+        
+        
