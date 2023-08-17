@@ -262,17 +262,14 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                     print(f_("mate count: {num} of {count} @ 0x{pos:02X}", num=i, count=material_count, pos=reader.tell()))
                     data = cm3d2_data.MaterialHandler.read(reader, read_header=False, version=model_ver)
                     
-                    if data.name.lower() in material_names:
-                        print(f"duplicate material name found! {data.name.lower()}")
-                        material_names[data.name.lower()] += 1
+                    data.name1 = data.name.lower()
+                    if data.name1 in material_names:
+                        print(f"duplicate material name found! {data.name1}")
+                        material_names[data.name1] += 1
                         new_name = data.name.lower() + "_" + str(material_names.get(data.name.lower()))
-                        material_names[new_name] = 1
                         data.name1 = new_name
-                    else:
-                        data.name1 = data.name.lower()
-                        material_names[data.name1] = 1
-
-                    #data.name1 = data.name.lower()
+                    
+                    material_names[data.name1] = 1
                     material_data.append(data)
                     
                     # name1 = common.read_str(reader)
