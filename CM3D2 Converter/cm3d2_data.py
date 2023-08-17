@@ -476,6 +476,11 @@ class Material():
     def name(self):
         return self.name2 or self.name1
 
+    @name.setter
+    def name(self, new_name: str):
+        self.name1 = new_name
+        self.name2 = new_name
+    
     def read(self, reader, read_header=True):
         if read_header:
             header = common.read_str(reader)
