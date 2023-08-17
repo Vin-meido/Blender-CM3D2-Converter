@@ -266,6 +266,7 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                         print(f"duplicate material name found! {data.name.lower()}")
                         material_names[data.name.lower()] += 1
                         new_name = data.name.lower() + "_" + str(material_names.get(data.name.lower()))
+                        material_names[new_name] = 1
                         data.name1 = new_name
                     else:
                         data.name1 = data.name.lower()
@@ -689,12 +690,11 @@ class CNV_OT_import_cm3d2_model(bpy.types.Operator, bpy_extras.io_utils.ImportHe
                 print(f_("material count: {num} of {count}", num=index, count=material_count))
 
                 print("    name: " + data.name)
-                if data.name not in data_names_map:
-                    data_names_map[data.name] = 1
-                else:
+                if data.name in data_names_map:
                     data_names_map[data.name] += 1
                     print(f"duplicate material name found! {data.name}")
                     data.name = data.name + "_" + str(data_names_map.get(data.name))
+                data_names_map[data.name] = 1
 
                 # may not be needed
                 if prefs.mate_unread_same_value and data.name in mates_set:
