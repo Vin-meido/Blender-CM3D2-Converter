@@ -10,7 +10,7 @@ import cm3d2converter
 
 class LiveLinkClientCLI:
     exe_path = Path(cm3d2converter.Managed.__file__).parent / 'COM3D2.LiveLink.CLI.exe'
-    
+
     def __init__(self, address: str = 'com3d2.livelink'):
         print(self.exe_path)
         self.address = address
@@ -19,11 +19,8 @@ class LiveLinkClientCLI:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
-        
 
 class TestLiveLink(BlenderTestCase):
-    
-   
     def setUp(self):
         super().setUp()
         self.address = f'com3d2.livelink.{os.getpid()}'
@@ -33,13 +30,13 @@ class TestLiveLink(BlenderTestCase):
     
     def test_send_animation(self):
         tpose_object: bpy.types.Object = bpy.data.objects.get('Tスタンス素体.armature')
-        bpy.context.view_layer.objects.active = tpose_object
+        self.activate_object(tpose_object)
         
         bpy.ops.com3d2livelink.send_animation()
     
     def test_link_pose(self):
         tpose_object: bpy.types.Object = bpy.data.objects.get('Tスタンス素体.armature')
-        bpy.context.view_layer.objects.active = tpose_object
+        self.activate_object(tpose_object)
         
         bpy.ops.object.mode_set(mode='POSE')
         
@@ -49,4 +46,6 @@ class TestLiveLink(BlenderTestCase):
     def test_stop_server(self):
         bpy.ops.com3d2livelink.stop_server()
     
-        
+    def test_send_model(self):
+        bpy.ops.import_mesh.import_cm3d2_model(filepath=f'{self.resources_dir}/body001.model')
+        bpy.ops.com3d2livelink.send_model()

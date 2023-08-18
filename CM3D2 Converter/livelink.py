@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
 @compat.BlRegister()
 class COM3D2LiveLinkSettings(bpy.types.PropertyGroup):
-    send_animation_max_frames = bpy.props.IntProperty(name="Maximum Frames to Send", default=500, min=1, soft_max=10000)
+    send_animation_max_frames = bpy.props.IntProperty(name="Max Frames to Send", default=500, min=1, soft_max=10000)
 
 
 @compat.BlRegister()
@@ -102,42 +102,51 @@ _set_active_core.core: LiveLinkCore = None
 
 @compat.BlRegister()
 class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
-    """Creates a Panel in the 3D Viewport under the "Vaporwave" tab"""
+    """Creates a Panel in the 3D Viewport under the "COM3D2" tab"""
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "COM3D2"
     bl_label = "LiveLink"
-    
+
     def __init__(self):
         super().__init__()
-    
+
     def draw(self, context):
+        self.draw_livelink_controls(context, self.layout)
+        self.layout.separator()
+        self.draw_model_controls(context, self.layout)
+        self.layout.separator()
+        self.draw_animation_controls(context, self.layout)
+
+    def draw_livelink_controls(self, context: bpy.types.Context, layout: bpy.types.UILayout):
+        core = _get_active_core()
+        col = layout.column()
+        if core is None:
+            col.operator(COM3D2LIVELINK_OT_start_server.bl_idname)
+            row = col.row()
+            row.alignment = 'RIGHT'
+            row.label(text="Server not running")
+        else:
+            col.operator_context = 'INVOKE_DEFAULT'
+            col.operator(COM3D2LIVELINK_OT_stop_server.bl_idname)
+            row = col.row()
+            row.alignment = 'RIGHT'
+            row.label(text="Connected" if (core is not None and core.IsConnected)
+                      else "Not connected")
+
+    def draw_model_controls(self, context: bpy.types.Context, layout: bpy.types.UILayout):
+        layout.label(text='Model', icon=compat.icon('MESH_DATA'))
+        layout.operator(COM3D2LIVELINK_OT_send_model.bl_idname)
+        
+    def draw_animation_controls(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         wm: WindowManager = context.window_manager
         core = _get_active_core()
         
-        wm = context.window_manager
-        
-        layout = self.layout
-        
-        if core is None:
-            col = layout.column()
-            col.operator(COM3D2LIVELINK_OT_start_server.bl_idname)
-            col.label(text="")
-        else:
-            col = layout.column()
-            col.operator_context = 'INVOKE_DEFAULT'
-            col.operator(COM3D2LIVELINK_OT_stop_server.bl_idname)
-            col.label(text="Connected" if (core is not None and core.IsConnected)
-                      else "Not connected")
-
-        layout.separator()
-
+        layout.label(text='Animation', icon=compat.icon('ANIM_DATA'))
         if not wm.com3d2_livelink_state.is_link_pose:
             layout.operator(COM3D2LIVELINK_OT_link_pose.bl_idname)
         else:
             layout.operator(COM3D2LIVELINK_OT_unlink_pose.bl_idname)
-
-        layout.separator()
         
         col = layout.column()
         col.enabled = bpy.ops.com3d2livelink.send_animation.poll()
@@ -148,9 +157,10 @@ class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
 
 @compat.BlRegister()
 class COM3D2LIVELINK_OT_start_server(bpy.types.Operator):
-    """Embed the data for vaporwave wireframe into the active UV slot"""
+    """Start the LiveLink server"""
     bl_idname = "com3d2livelink.start_server"
     bl_label = "Start LiveLink"
+    bl_options = {'REGISTER'}
 
     address = bpy.props.StringProperty("Address", default='com3d2.livelink')
     wait_for_connection = bpy.props.BoolProperty("Wait For Connection", default=False)
@@ -181,9 +191,10 @@ class COM3D2LIVELINK_OT_start_server(bpy.types.Operator):
 
 @compat.BlRegister()
 class COM3D2LIVELINK_OT_stop_server(bpy.types.Operator):
-    """Embed the data for vaporwave wireframe into the active UV slot"""
+    """Stop the LiveLink server"""
     bl_idname = 'com3d2livelink.stop_server'
     bl_label = "Stop LiveLink"
+    bl_options = {'REGISTER'}
     
     @classmethod
     def poll(cls, context):
@@ -216,9 +227,10 @@ class COM3D2LIVELINK_OT_stop_server(bpy.types.Operator):
 
 @compat.BlRegister()
 class COM3D2LIVELINK_OT_wait_for_connection(bpy.types.Operator):
-    """Embed the data for vaporwave wireframe into the active UV slot"""
+    """Wait for a connection from a LiveLink client"""
     bl_idname = 'com3d2livelink.wait_for_connection'
     bl_label = "Wait for Connection"
+    bl_options = {'REGISTER'}
     
     @classmethod
     def poll(cls, context):
@@ -237,9 +249,10 @@ class COM3D2LIVELINK_OT_wait_for_connection(bpy.types.Operator):
 
 @compat.BlRegister()
 class COM3D2LIVELINK_OT_send_animation(bpy.types.Operator):
-    """Embed the data for vaporwave wireframe into the active UV slot"""
+    """Send an animation to connected LiveLink client"""
     bl_idname = "com3d2livelink.send_animation"
     bl_label = "Send Animation"
+    bl_options = {'REGISTER'}
     
     max_frames = bpy.props.IntProperty(name="Maximum Frames to Send", default=1000, min=1, soft_max=10000)
 
@@ -284,7 +297,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
     """Operator which runs its self from a timer"""
     bl_idname = 'com3d2livelink.link_pose'
     bl_label = "Link Pose"
-    bl_options = {'UNDO'}
+    bl_options = {'REGISTER'}
     
     timer = None
     
@@ -353,7 +366,7 @@ class COM3D2LIVELINK_OT_unlink_pose(bpy.types.Operator):
     """Operator which runs its self from a timer"""
     bl_idname = 'com3d2livelink.unlink_pose'
     bl_label = "Unlink Pose"
-    bl_options = {'UNDO'}
+    bl_options = {'REGISTER'}
     
     timer = None
     
@@ -371,3 +384,31 @@ class COM3D2LIVELINK_OT_unlink_pose(bpy.types.Operator):
         state.is_link_pose = False
         return {'FINISHED'}
 
+
+@compat.BlRegister()
+class COM3D2LIVELINK_OT_send_model(bpy.types.Operator):
+    """Send a model to the connected LiveLink client"""
+    bl_idname = 'com3d2livelink.send_model'
+    bl_label = "Send Model"
+    bl_options = {'REGISTER'}
+    
+    timer = None
+    
+    @classmethod
+    def poll(cls, context):
+        core = _get_active_core()
+        if core is None or not core.IsConnected:
+            return False
+        return bpy.ops.export_mesh.export_cm3d2_model.poll(context)
+
+    def execute(self, context):
+        core = _get_active_core()
+        fd, filepath = tempfile.mkstemp('.model')
+        try:
+            os.close(fd)
+            bpy.ops.export_mesh.export_cm3d2_model(filepath=filepath)
+            with open(filepath, mode='rb') as file:
+                core.SendBytes(file.read())
+        finally:
+            os.remove(filepath)
+        return {'FINISHED'}

@@ -18,4 +18,4 @@ except: # pylint:disable=bare-except
     #__all__ = cm3d2converter.__all__
 
 #import bpy
-register()
+#register()

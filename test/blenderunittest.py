@@ -62,8 +62,8 @@ class BlenderTestCase(TestCase):
                 cm3d2converter = importlib.import_module(self.cm3d2converter_directory.name)
                 cm3d2converter.register()
                 cm3d2converter.common.preferences().backup_ext = ''
-            except:
-                pass
+            except Exception as ex:
+                print(ex)
             finally:
                 BlenderTestCase.is_cm3d2converter_registered = True
 
