@@ -3,10 +3,10 @@ name: Generate Release
 # generate release for tagged commits on default branch
 on:
   push:
-    #branches:
-    #  - bl_28
-    #tags:
-    #  - "luv\\.[0-9]+\\.[0-9]+\\.[0-9]+*"
+    branches:
+      - bl_28
+    tags:
+      - "luv\\.[0-9]+\\.[0-9]+\\.[0-9]+*"
 
 
 # security: restrict permissions for CI jobs.
