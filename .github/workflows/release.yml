@@ -38,10 +38,23 @@ jobs:
         with:
           name: ${{ env.ZIP_FILE }}
           path: ${{ env.ZIP_FILE }}
-      - name: Draft Release
+      - name: Draft Tagged Release
+        if: ${{ github.ref_type == 'tag' }}
         uses: ncipollo/release-action@v1
         with:
           artifacts: ${{ env.ZIP_FILE }}
           draft: true
           generateReleaseNotes: true
+      - name: Draft Untagged Release
+        if: ${{ github.ref_type == 'branch' }}
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ env.ZIP_FILE }}
+          draft: true
+          generateReleaseNotes: true
+          tag: latest-prerelease
+          prerelease: true
+          allowUpdates: true
+          updateOnlyUnreleased: true
+
             
