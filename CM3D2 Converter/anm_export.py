@@ -997,6 +997,7 @@ class AnmBuilder:
         return bones
     
     def get_track_data(self, anm_data_raw):
+        track_data: dict[str, dict[Anm.ChannelIdType, dict[float, tuple[float, float, float]]]]
         track_data = {}
         for bone_name, channels in anm_data_raw.items():
             track_data[bone_name] = {
@@ -1036,6 +1037,10 @@ class AnmBuilder:
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleX][t] = (scl.x, tangent_in.x, tangent_out.x)
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleY][t] = (scl.y, tangent_in.y, tangent_out.y)
                     track_data[bone_name][Anm.ChannelIdType.ExLocalScaleZ][t] = (scl.z, tangent_in.z, tangent_out.z)
+            
+            # Remove empty channels
+            track_data[bone_name] = {id: ch for id, ch in track_data[bone_name].items()
+                                     if len(ch) > 0}
         return track_data
     
     #@staticmethod

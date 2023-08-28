@@ -290,3 +290,42 @@ class HotdogAnmTest(AnmTestCase):
         
         self.assertPoseFramesEqual(hotdog_armature_object.pose, copy_armature_object.pose,
                                    bpy.context.scene.frame_start, bpy.context.scene.frame_end)
+
+
+class VanillaAnmTest(AnmTestCase):
+    """If not exporting with any extended anm features, it should be
+    importable into the game without COM3D2.ExtendedAnm.Plugin.dll
+    """
+    
+    def test_vanilla_anm_no_scale(self):
+        """Make sure there are no channels with scale keys"""
+        body001_armature_object: bpy.types.Object = bpy.data.objects.get('body001.body.armature')
+        self.activate_object(body001_armature_object)
+        
+        out_file = f'{self.output_dir}/{self._testMethodName}.anm'
+        
+        bpy.ops.export_anim.export_cm3d2_anm(
+            filepath=out_file,
+            is_backup=False,
+            frame_start=1,
+            frame_end=4000,
+            is_scale=False,
+        )
+        
+        from CM3D2.Serialization.Files import Anm
+        from cm3d2converter import fileutil
+        
+        with open(out_file, 'rb') as anm_file: 
+            anm = fileutil.deserialize_from_file(Anm, anm_file)
+        
+        for track in anm.tracks:
+            for channel in track.channels:
+                channel: Anm.Channel
+                self.assertNotEqual(channel.channelId, Anm.ChannelIdType.ExLocalScaleX)
+                self.assertNotEqual(channel.channelId, Anm.ChannelIdType.ExLocalScaleY)
+                self.assertNotEqual(channel.channelId, Anm.ChannelIdType.ExLocalScaleZ)
+        
+        
+        
+        
+        
