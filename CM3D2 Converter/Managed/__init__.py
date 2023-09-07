@@ -56,6 +56,23 @@ def _add_references():
     try:
         clr.AddReference('CM3D2.Serialization')
         clr.AddReference('COM3D2.LiveLink')
-    except FileLoadException:  # type: ignore
-        Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'CM3D2.Serialization.dll'))
-        Assembly.UnsafeLoadFrom(str(_MANAGED_DIR / 'COM3D2.LiveLink.dll'))
+    except FileLoadException as ex:  # type: ignore
+        _copy_unsafe_dll('CM3D2.Serialization.dll')
+        _copy_unsafe_dll('COM3D2.LiveLink.dll')
+        _copy_unsafe_dll('System.Threading.dll')
+        clr.AddReference('CM3D2.Serialization')
+        clr.AddReference('COM3D2.LiveLink')
+
+def _copy_unsafe_dll(filename: str):
+    """For some people who download the add-on as a .zip,
+    the dlls will be marked as originating from a remote source.
+    Windows will refuse to load these dlls.
+    Try working around this by copying it.
+    """
+    import os
+    import shutil
+    dll_path = (_MANAGED_DIR / filename).absolute()
+    bak_path = dll_path + '.bak'
+    shutil.move(dll_path, bak_path)
+    shutil.copy(bak_path, dll_path)
+    os.remove(bak_path)
