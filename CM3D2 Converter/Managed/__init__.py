@@ -64,15 +64,21 @@ def _add_references():
         clr.AddReference('COM3D2.LiveLink')
 
 def _copy_unsafe_dll(filename: str):
-    """For some people who download the add-on as a .zip,
+    """If the addon is unzipped and placed directly in the addons folder,
     the dlls will be marked as originating from a remote source.
     Windows will refuse to load these dlls.
     Try working around this by copying it.
     """
     import os
     import shutil
-    dll_path = (_MANAGED_DIR / filename).absolute()
+    dll_path = str((_MANAGED_DIR / filename).absolute())
     bak_path = dll_path + '.bak'
+    if os.path.exists(bak_path):
+        os.remove(bak_path)
     shutil.move(dll_path, bak_path)
     shutil.copy(bak_path, dll_path)
-    os.remove(bak_path)
+    try:
+        os.remove(bak_path)
+    except OSError as ex:
+        import warnings
+        warnings.warn(str(ex), RuntimeWarning)
