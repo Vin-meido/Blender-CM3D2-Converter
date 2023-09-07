@@ -170,6 +170,64 @@ def make_annotations(cls):
     return cls
 
 
+import functools
+import inspect
+import warnings
+
+string_types = (type(b''), type(u''))
+
+
+def deprecated(target_or_reason: str | type | FunctionType):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used.
+    
+    The ``@deprecated`` decorator is used either with a reason...
+    ```
+    @deprecated("please, use another function")
+    def old_function(x, y):
+        pass
+    ```
+    ...or without a reason
+    ```
+    @deprecated
+    def old_function(x, y):
+        pass
+    ```
+    """
+    target = None
+    reason = None
+    if isinstance(target_or_reason, str):
+        reason = target_or_reason
+    elif inspect.isclass(target_or_reason) or inspect.isfunction(target_or_reason):
+        target = target_or_reason
+    else:
+        raise TypeError(repr(type(target_or_reason)))
+        
+    def decorator(func):
+        if inspect.isclass(func):
+            msg = f"Call to deprecated class {func.__name__}."
+        else:
+            msg = f"Call to deprecated function {func.__name__}."
+        if reason is not None:
+            msg += f" {reason}"
+        @functools.wraps(func)
+        def func_wrapper(*args, **kwargs):
+            warnings.simplefilter('always', DeprecationWarning)
+            warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
+            warnings.simplefilter('default', DeprecationWarning)
+            return func(*args, **kwargs)
+        return func_wrapper
+    
+    if reason is not None:
+        return decorator
+    elif target is not None:
+        return decorator(target)
+    else:
+        raise TypeError(repr(type(target_or_reason)))
+
+
+
 def layout_split(layout, factor=0.0, align=False):
     if IS_LEGACY:
         return layout.split(percentage=factor, align=align)
