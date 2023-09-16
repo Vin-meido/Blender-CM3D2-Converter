@@ -56,7 +56,7 @@ def _add_references():
     try:
         clr.AddReference('CM3D2.Serialization')
         clr.AddReference('COM3D2.LiveLink')
-    except FileLoadException as ex:  # type: ignore
+    except FileLoadException:  # type: ignore
         _copy_unsafe_dll('CM3D2.Serialization.dll')
         _copy_unsafe_dll('COM3D2.LiveLink.dll')
         _copy_unsafe_dll('System.Threading.dll')
