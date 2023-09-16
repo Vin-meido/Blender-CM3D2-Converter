@@ -228,13 +228,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         selected_objs = context.selected_objects
         source_objs = []
-        prev_mode = None
+        ob_source = None
+        ob_name = None
+        prev_mode = context.active_object.mode
         try:
             ob_source = context.active_object
+            ob_name = ob_source.name
             if ob_source not in selected_objs:
                 selected_objs.append(ob_source) # luvoid : Fix error where object is active but not selected
-            ob_name = ob_source.name
             ob_main = None
+
+            if context.active_object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+
             if self.is_batch:
                 # アクティブオブジェクトを１つコピーするだけでjoinしない
                 source_objs.append(ob_source)
@@ -261,11 +267,6 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
                         selected_count += 1
 
-                mode = context.active_object.mode
-                if mode != 'OBJECT':
-                    prev_mode = mode
-                    bpy.ops.object.mode_set(mode='OBJECT')
-
                 if selected_count > 1:
                     if ob_main:
                         compat.set_active(context, ob_main)
@@ -291,10 +292,8 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             for obj in source_objs:
                 compat.set_select(obj, True)
 
-            if ob_source:
-                # TODO 元のオブジェクトをアクティブに戻す
-                if ob_name in bpy.data.objects:
-                    compat.set_active(context, ob_source)
+            if ob_source and ob_name in bpy.data.objects:
+                compat.set_active(context, ob_source)
 
             if prev_mode:
                 bpy.ops.object.mode_set(mode=prev_mode)

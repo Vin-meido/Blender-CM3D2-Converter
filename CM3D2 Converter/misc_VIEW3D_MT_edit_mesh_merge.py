@@ -4,14 +4,16 @@ import bmesh
 from . import common
 from . import compat
 
-# メニュー等に項目追加
+@compat.deprecated("The operator this menu displayed is obsolete since Blender 3.3.")
+#@compat.BlRegister(append_to=bpy.types.VIEW3D_MT_edit_mesh_merge)
 def menu_func(self, context):
     icon_id = common.kiss_icon()
     self.layout.separator()
     self.layout.label(text="CM3D2", icon_value=icon_id)
     self.layout.operator('mesh.remove_and_mark_doubles')
 
-@compat.BlRegister()
+@compat.deprecated("This operator is obsolete since Blender 3.3.")
+#@compat.BlRegister()
 class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
     bl_idname = 'mesh.remove_and_mark_doubles'
     bl_label = "Remove and Mark Doubles"
@@ -45,7 +47,7 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
         # メッシュ整頓
         if me.has_custom_normals:
             layer = bm.loops.layers.float_vector.new('custom_normals.temp')
-            set_bmlayer_from_custom_normals(bm, layer, me)
+            self.set_bmlayer_from_custom_normals(bm, layer, me)
 
         if self.is_sharp:
             pass
@@ -56,7 +58,7 @@ class CNV_OT_remove_and_mark_doubles(bpy.types.Operator):
 
         if me.has_custom_normals:
             if self.keep_custom_normals:
-                set_custom_normals_from_bmlayer(bm, layer, me)
+                self.set_custom_normals_from_bmlayer(bm, layer, me)
             bm.loops.layers.float_vector.remove(layer)
             bmesh.update_edit_mesh(me)
         
