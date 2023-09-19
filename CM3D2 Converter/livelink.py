@@ -350,7 +350,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
         builder.frame_end           = context.scene.frame_current
         builder.export_method       = 'ALL'
         builder.is_visual_transform = True
-        builder.is_remove_unkeyed_bone = wm.com3d2_livelink_settings.is_remove_unkeyed_bone
+        builder.is_remove_unkeyed_bone = wm.com3d2_livelink_settings.anm_is_remove_unkeyed_bone
         
         anm = builder.build_anm(context)
         
