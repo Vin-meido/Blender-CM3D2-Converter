@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 @compat.BlRegister()
 class COM3D2LiveLinkSettings(bpy.types.PropertyGroup):
     send_animation_max_frames = bpy.props.IntProperty(name="Max Frames to Send", default=500, min=1, soft_max=10000)
-
+    anm_is_remove_unkeyed_bone = bpy.props.BoolProperty(name="Remove Unkeyed Bones", default=False)
 
 @compat.BlRegister()
 class COM3D2LiveLinkState(bpy.types.PropertyGroup):
@@ -150,9 +150,11 @@ class VIEW3D_PT_com3d2_livelink(bpy.types.Panel):
         
         col = layout.column()
         col.enabled = bpy.ops.com3d2livelink.send_animation.poll()
+        col.prop(wm.com3d2_livelink_settings, 'anm_is_remove_unkeyed_bone')
         col.prop(wm.com3d2_livelink_settings, 'send_animation_max_frames')
         send_animation_opr = layout.operator(COM3D2LIVELINK_OT_send_animation.bl_idname)
         send_animation_opr.max_frames = wm.com3d2_livelink_settings.send_animation_max_frames
+        send_animation_opr.is_remove_unkeyed_bone = wm.com3d2_livelink_settings.anm_is_remove_unkeyed_bone
 
 
 @compat.BlRegister()
@@ -255,6 +257,7 @@ class COM3D2LIVELINK_OT_send_animation(bpy.types.Operator):
     bl_options = {'REGISTER'}
     
     max_frames = bpy.props.IntProperty(name="Maximum Frames to Send", default=1000, min=1, soft_max=10000)
+    is_remove_unkeyed_bone = bpy.props.BoolProperty(name="Remove Unkeyed Bones", default=False)
 
     @classmethod
     def poll(cls, context):
@@ -274,10 +277,11 @@ class COM3D2LIVELINK_OT_send_animation(bpy.types.Operator):
         current_frame = context.scene.frame_current
         
         builder = AnmBuilder(reporter=self)
-        builder.frame_start         = context.scene.frame_current
-        builder.frame_end           = min(context.scene.frame_end, builder.frame_start + self.max_frames)
-        builder.export_method       = 'ALL'
-        builder.is_visual_transform = True
+        builder.frame_start            = context.scene.frame_current
+        builder.frame_end              = min(context.scene.frame_end, builder.frame_start + self.max_frames)
+        builder.export_method          = 'ALL'
+        builder.is_visual_transform    = True
+        builder.is_remove_unkeyed_bone = self.is_remove_unkeyed_bone
         
         anm = builder.build_anm(context)
         
@@ -337,6 +341,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def update_pose(self, context: bpy.types.Context):
+        wm: bpy.types.WindowManager = context.window_manager
         core = _get_active_core()
         
         builder = AnmBuilder(reporter=self)
@@ -345,6 +350,7 @@ class COM3D2LIVELINK_OT_link_pose(bpy.types.Operator):
         builder.frame_end           = context.scene.frame_current
         builder.export_method       = 'ALL'
         builder.is_visual_transform = True
+        builder.is_remove_unkeyed_bone = wm.com3d2_livelink_settings.is_remove_unkeyed_bone
         
         anm = builder.build_anm(context)
         
