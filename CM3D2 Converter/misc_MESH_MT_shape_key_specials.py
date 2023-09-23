@@ -172,7 +172,7 @@ else:
 
 
 class shape_key_transfer_op(_op_base):
-    is_first_remove_all = bpy.props.BoolProperty(name="最初に全シェイプキーを削除", default=True)
+    is_first_remove_all = bpy.props.BoolProperty(name="最初に全シェイプキーを削除", default=False)
     is_remove_empty     = bpy.props.BoolProperty(name="変形のないシェイプキーを削除", default=True)
     is_bind_current_mix = bpy.props.BoolProperty(name="Bind to current source mix", default=False)
     subdivide_number    = bpy.props.IntProperty (name="参照元の分割", default=1, min=0, max=10, soft_min=0, soft_max=10)
