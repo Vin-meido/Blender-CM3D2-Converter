@@ -273,7 +273,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                     bpy.ops.object.join()
                     self.report(type={'INFO'}, message=f_tip_("{}個のオブジェクトをマージしました", selected_count))
 
-            ret = self.export(context, ob_main)
+            ret = self.export(context, ob_main, source_objs)
             if 'FINISHED' not in ret:
                 return ret
 
@@ -298,7 +298,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
             if prev_mode:
                 bpy.ops.object.mode_set(mode=prev_mode)
 
-    def export(self, context, ob):
+    def export(self, context, ob, sources):
         """モデルファイルを出力"""
         prefs = common.preferences()
 
@@ -448,7 +448,7 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
                         boneindex = parent['parent_index']
             if len(vgs) == 0:
                 if not self.is_batch:
-                    self.select_no_weight_vertices(context, local_bone_name_indices)
+                    self.select_no_weight_vertices(context, local_bone_name_indices, sources)
                 return self.report_cancel("ウェイトが割り当てられていない頂点が見つかりました、中止します")
             if len(vgs) > 4:
                 is_in_too_many += 1
@@ -984,23 +984,19 @@ class CNV_OT_export_cm3d2_model(bpy.types.Operator):
 
         return tangents
 
-    def select_no_weight_vertices(self, context, local_bone_name_indices):
+    def select_no_weight_vertices(self, context, local_bone_name_indices, source_objs=[]):
         """ウェイトが割り当てられていない頂点を選択する"""
-        ob = context.active_object
-        me = ob.data
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        #bpy.ops.object.mode_set(mode='OBJECT')
-        context.tool_settings.mesh_select_mode = (True, False, False)
-        for vert in me.vertices:
-            for vg in vert.groups:
-                if len(ob.vertex_groups) <= vg.group: # Apparently a vertex can be assigned to a non-existent group.
-                    continue
-                name = common.encode_bone_name(ob.vertex_groups[vg.group].name, self.is_convert_bone_weight_names)
-                if name in local_bone_name_indices and 0.0 < vg.weight:
-                    vert.select = False
-                    break
-        bpy.ops.object.mode_set(mode='EDIT')
+        for ob in source_objs:
+            me = ob.data
+            for vert in me.vertices:
+                vert.select = True
+                for vg in vert.groups:
+                    if len(ob.vertex_groups) <= vg.group: # Apparently a vertex can be assigned to a non-existent group.
+                        vert.select = True
+                    name = common.encode_bone_name(ob.vertex_groups[vg.group].name, self.is_convert_bone_weight_names)
+                    if name in local_bone_name_indices and 0.0 < vg.weight:
+                        vert.select = False
+                        break
 
     def armature_bone_data_parser(self, context, ob):
         """アーマチュアを解析してBoneDataを返す"""
